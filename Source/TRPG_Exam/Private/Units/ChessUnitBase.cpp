@@ -2,6 +2,7 @@
 
 #include "Units/ChessUnitBase.h"
 #include "Components/StaticMeshComponent.h"
+#include "Framwork/ChessGameMode.h"
 #include "Managers/ChessGridManager.h"
 
 AChessUnitBase::AChessUnitBase()
@@ -90,7 +91,8 @@ void AChessUnitBase::NotifyActorBeginCursorOver()
 	if (OnUnitHoverUpdated.IsBound())
 	{
 		OnUnitHoverUpdated.Broadcast(this);
-		if (GridManager->SelectedUnit != this && !GridManager->IsUnitClicked)
+		AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode());
+		if (!GridManager->IsUnitClicked && GameMode->CurrentTurn == ETurnState::Player)
 			ToggleUnitHUD(true, Team == EChessTeam::Enemy, this);
 	}
 }
@@ -102,7 +104,7 @@ void AChessUnitBase::NotifyActorEndCursorOver()
 	if (OnUnitHoverUpdated.IsBound())
 	{
 		OnUnitHoverUpdated.Broadcast(nullptr);
-		if (GridManager->SelectedUnit != this && !GridManager->IsUnitClicked)
+		if (!GridManager->IsUnitClicked)
 			ToggleUnitHUD(false, Team == EChessTeam::Enemy, this);
 	}
 }
@@ -117,7 +119,7 @@ void AChessUnitBase::NotifyActorOnClicked(FKey ButtonPressed)
 	}
 }
 
-void AChessUnitBase::OnUnitClickedFeedback_Implementation() {}
+void AChessUnitBase::OnUnitClickedFeedback_Implementation(){}
 void AChessUnitBase::OnUnitUnclickedFeedback_Implementation() {}
 
 void AChessUnitBase::ToggleUnitHUD_Implementation(bool Visible, bool IsEnemy, AChessUnitBase* SelectedInstigator) {}

@@ -69,7 +69,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUnitHighlightUpdated, AChessUnitB
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUnitClicked, AChessUnitBase*, Unit);
 
 UCLASS()
-class TRPG_EXAM_API AChessUnitBase : public AActor, public IAbilitySystemInterface
+class TRPG_EXAM_API AChessUnitBase : public APawn, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 

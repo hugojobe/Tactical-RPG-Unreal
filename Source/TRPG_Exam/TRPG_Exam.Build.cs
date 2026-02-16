@@ -16,7 +16,8 @@ public class TRPG_Exam : ModuleRules
 			"EnhancedInput",
 			"GameplayAbilities", 
 			"GameplayTags", 
-			"GameplayTasks"
+			"GameplayTasks",
+			"AIModule",
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

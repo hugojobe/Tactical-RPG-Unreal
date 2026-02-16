@@ -53,9 +53,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game State")
 	ETurnState CurrentTurnActionState = ETurnState::Player;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game State")
-	ETurnState CurrentPlayerState = ETurnState::Player;
-
 // VISUAL CONFIG
 	UPROPERTY(EditAnywhere, Category = "Grid Visuals")
 	TSubclassOf<AChessTileBase> WhiteTileClass;

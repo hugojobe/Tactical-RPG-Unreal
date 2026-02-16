@@ -5,6 +5,7 @@
 
 #include "ToolBuilderUtil.h"
 #include "Components/TimelineComponent.h"
+#include "Framwork/ChessGameMode.h"
 #include "Kismet/GameplayStatics.h"
 
 AChessGridManager::AChessGridManager()
@@ -80,6 +81,17 @@ void AChessGridManager::RegisterUnitAt(FIntPoint GridPos, AChessUnitBase* Unit)
 
 	Unit->GridCoordinates = FVector2D(GridPos.X, GridPos.Y);
 	Unit->SetActorLocation(GridToWorld(GridPos));
+	
+	if (Unit->UnitType == EChessUnitType::King)
+	{
+		if (AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode()))
+		{
+			if (Unit->Team == EChessTeam::Player)
+				GameMode->bPlayerKingExists = true;
+			else if (Unit->Team == EChessTeam::Enemy)
+				GameMode->bEnemyKingExists = true;
+		}
+	}
 }
 
 void AChessGridManager::ClearTile(FIntPoint GridPos)
@@ -338,7 +350,9 @@ void AChessGridManager::HighlightTilesForUnit_Implementation(AChessUnitBase* Uni
 
 void AChessGridManager::MoveUnit_Implementation(AChessUnitBase* Unit, FIntPoint Position)
 {
-	if(!Unit || !UnitMovementSpeedCurve || CurrentTurnActionState != CurrentPlayerState) return;
+	const AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode());
+	if (!GameMode) return;
+	if(!Unit || !UnitMovementSpeedCurve || CurrentTurnActionState != GameMode->CurrentTurn) return;
 
 	CurrentTurnActionState = ETurnState::None;
 	
@@ -401,7 +415,10 @@ void AChessGridManager::HandleMoveFinished_Implementation()
 
 void AChessGridManager::AttackUnit_Implementation(AChessUnitBase* Attacker, AChessUnitBase* TargetUnit)
 {
-	if(!Attacker || !TargetUnit || !AttackRushCurve || !AttackBounceBackCurve || CurrentTurnActionState != CurrentPlayerState) return;
+	const AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode());
+	if (!GameMode) return;
+	
+	if(!Attacker || !TargetUnit || !AttackRushCurve || !AttackBounceBackCurve || CurrentTurnActionState != GameMode->CurrentTurn) return;
 
 	CurrentTurnActionState = ETurnState::None;
 	
@@ -434,7 +451,7 @@ void AChessGridManager::AttackUnit_Implementation(AChessUnitBase* Attacker, AChe
 
 	float Distance = FVector::Dist(AttackStartPos, AttackerImpactPos);
     
-	float DesiredDuration = FMath::Max(Distance / 1300, 0.1f);
+	float DesiredDuration = FMath::Max(Distance / 2000, 0.1f);
 
 	float CurveLength = 0.2f;
 	if (AttackRushCurve)
@@ -543,6 +560,7 @@ void AChessGridManager::HandleAttackFinished_Implementation()
 			HighlightTilesForUnit(nullptr);
 				
 			PlayerActionFinished();
+				
 			break;
 		}
 	}
@@ -552,5 +570,9 @@ void AChessGridManager::PlayImpactFeedback_Implementation(AChessUnitBase* Attack
 
 void AChessGridManager::PlayerActionFinished_Implementation()
 {
-	CurrentTurnActionState = CurrentPlayerState;
+	if (AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode()))
+	{
+		GameMode->CheckWinCondition();
+		GameMode->PlayerActionFinished(this);
+	}
 }
