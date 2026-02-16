@@ -175,7 +175,7 @@ bool AChessGridManager::IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase
 	return Unit->Team != TargetUnit->Team;
 }
 
-TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(AChessUnitBase* Unit)
+TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(AChessUnitBase* Unit, bool bIncludeEmptyAttacks)
 {
 	TMap<FIntPoint, ETileInteraction> ValidMoves;
 	if (!Unit) return ValidMoves;
@@ -188,10 +188,13 @@ TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(AChessUnitBas
 		int32 Dir = (Unit->Team == EChessTeam::Player) ? 1 : -1;
 		
 		FIntPoint Forward(StartPos.X, StartPos.Y + Dir);
+		FIntPoint Backward(StartPos.X, StartPos.Y - Dir);
+		
 		if (IsValidGridPos(Forward) && GetUnitAt(Forward) == nullptr)
-		{
 			ValidMoves.Add(Forward, ETileInteraction::Move);
-		}
+		if (IsValidGridPos(Backward) && GetUnitAt(Backward) == nullptr)
+			ValidMoves.Add(Backward, ETileInteraction::Move);
+		
 		
 		FIntPoint Attacks[] = {
 			FIntPoint(StartPos.X - 1, StartPos.Y + Dir),
@@ -203,7 +206,7 @@ TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(AChessUnitBas
 			if (IsValidGridPos(AttackPos))
 			{
 				AChessUnitBase* Target = GetUnitAt(AttackPos);
-				if (Target && IsEnemy(Unit, Target))
+				if (bIncludeEmptyAttacks || (Target && IsEnemy(Unit, Target)))
 				{
 					ValidMoves.Add(AttackPos, ETileInteraction::Attack);
 				}
@@ -232,7 +235,7 @@ TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(AChessUnitBas
 			}
 			else
 			{
-				if (IsEnemy(Unit, Occupant))
+				if (bIncludeEmptyAttacks || IsEnemy(Unit, Occupant))
 				{
 					ValidMoves.Add(CheckPos, ETileInteraction::Attack);
 				}

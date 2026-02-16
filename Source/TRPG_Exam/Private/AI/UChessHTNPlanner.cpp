@@ -2,24 +2,28 @@
 
 FHTNTask UChessHTNPlanner::MakePlan()
 {
-	if (!GridManager) return FHTNTask();
+	
 
 	FWorldState State;
 	State.ThreatMap.Init(GridManager->BoardWidth, GridManager->BoardHeight);
 	State.BenefitMap.Init(GridManager->BoardWidth, GridManager->BoardHeight);
+
+	LastThreatMap.Init(GridManager->BoardWidth, GridManager->BoardHeight);
+	LastBenefitMap.Init(GridManager->BoardWidth, GridManager->BoardHeight);
     
 	for (auto& Tile : GridManager->GridMap)
 	{
 		if (AChessUnitBase* UnitOnTile = Tile.Value)
 		{
-			State.EnemyUnits.Empty();
-			State.MyUnits.Empty();
 			if (UnitOnTile->Team == MyUnit->Team) State.MyUnits.Add(UnitOnTile);
 			else State.EnemyUnits.Add(UnitOnTile);
 		}
 	}
     
 	BuildInfluenceMaps(State);
+
+	LastThreatMap = State.ThreatMap;
+	LastBenefitMap = State.BenefitMap;
     
 	FHTNTask BestPlan;
 	if (Method_WinGame(State, BestPlan))
@@ -34,15 +38,29 @@ void UChessHTNPlanner::BuildInfluenceMaps(FWorldState& State)
 {
 	for (AChessUnitBase* Enemy : State.EnemyUnits)
 	{
-		TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(Enemy);
+		TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(Enemy, true);
 		float ThreatValue = Enemy->Attributes->GetDamage();
 
 		for (auto& Move : Moves)
 		{
-			if (Move.Value == ETileInteraction::Attack || Move.Value == ETileInteraction::Move)
+			bool bIsThreat = false;
+			if (Enemy->MovementRule.MovementStyle == EMovementStyle::Pawn)
 			{
-				State.ThreatMap.AddValue(Move.Key.X, Move.Key.Y, ThreatValue);
+				if (Move.Value == ETileInteraction::Attack)
+				{
+					bIsThreat = true;
+				}
 			}
+			else
+			{
+				if (Move.Value == ETileInteraction::Attack || Move.Value == ETileInteraction::Move)
+				{
+					bIsThreat = true;
+				}
+			}
+
+			if(bIsThreat)
+				State.ThreatMap.AddValue(Move.Key.X, Move.Key.Y, ThreatValue);
 		}
 	}
 	
@@ -97,7 +115,7 @@ bool UChessHTNPlanner::Method_FindBestTrade(const FWorldState& State, FHTNTask& 
 {
 	FHTNTask Task = FindBestAttack(State, false);
     
-	if (Task.IsValid() && Task.Score > 10.0f) 
+	if (Task.IsValid() && Task.Score > 0.0f) 
 	{
 		OutTask = Task;
 		return true;
@@ -113,6 +131,14 @@ bool UChessHTNPlanner::Method_PlaySafe(const FWorldState& State, FHTNTask& OutTa
 		OutTask = Task;
 		return true;
 	}
+
+	Task = FindAnyMove(State);
+	if(Task.IsValid())
+	{
+		OutTask = Task;
+		return true;
+	}
+
 	return false;
 }
 
@@ -204,76 +230,35 @@ FHTNTask UChessHTNPlanner::FindBestAttack(const FWorldState& State, bool bPriori
 FHTNTask UChessHTNPlanner::FindSafeMove(const FWorldState& State)
 {
 	FHTNTask BestTask;
-    BestTask.TaskName = FName("None");
-    BestTask.Score = -9999.0f;
-	BestTask.Type = EHTNTaskType::Action;
-
-    if (!GridManager) return BestTask;
-
-    for (AChessUnitBase* Me : State.MyUnits)
-    {
-        int32 StartX = Me->GridCoordinates.X;
-        int32 StartY = Me->GridCoordinates.Y;
-        
-        float CurrentThreat = State.ThreatMap.GetValue(StartX, StartY);
-        float CurrentBenefit = State.BenefitMap.GetValue(StartX, StartY);
-    	float CurrentScore = CurrentBenefit - (CurrentThreat * 2.0f * SafetyFactor);
-    	
-        TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(Me);
-
-        for (const TPair<FIntPoint, ETileInteraction>& Move : Moves)
-        {
-            if (Move.Value != ETileInteraction::Move) continue;
-
-            int32 DestX = Move.Key.X;
-            int32 DestY = Move.Key.Y;
-
-            float ThreatAtDest = State.ThreatMap.GetValue(DestX, DestY);
-            float BenefitAtDest = State.BenefitMap.GetValue(DestX, DestY);
-
-        	float NetScore = BenefitAtDest - (ThreatAtDest * 2.0f * SafetyFactor);
-        	
-            if (NetScore > (CurrentScore + 0.5f))
-            {
-                if (NetScore > BestTask.Score)
-                {
-                    BestTask.TaskName = FName("Move");
-                    BestTask.Type = EHTNTaskType::Action;
-                    BestTask.TargetUnit = nullptr;
-                    BestTask.TargetTile = Move.Key;
-                    BestTask.Score = NetScore;
-                }
-            }
-        }
-    }
-
-    return BestTask;
-}
-
-FHTNTask UChessHTNPlanner::FindAnyMove(const FWorldState& State)
-{
-	FHTNTask BestTask;
 	BestTask.TaskName = FName("None");
 	BestTask.Score = -99999.0f;
 	BestTask.Type = EHTNTaskType::Action;
 
-	if (!GridManager) return BestTask;
+	if (!GridManager || !MyUnit) return BestTask;
 
-	for (AChessUnitBase* Me : State.MyUnits)
+	int32 StartX = MyUnit->GridCoordinates.X;
+	int32 StartY = MyUnit->GridCoordinates.Y;
+
+	float CurrentThreat = State.ThreatMap.GetValue(StartX, StartY);
+	float CurrentBenefit = State.BenefitMap.GetValue(StartX, StartY);
+	float CurrentScore = CurrentBenefit - (CurrentThreat * 2.0f * SafetyFactor);
+
+	TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(MyUnit);
+
+	for (const TPair<FIntPoint, ETileInteraction>& Move : Moves)
 	{
-		TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(Me);
+		if (Move.Value != ETileInteraction::Move) continue;
 
-		for (const TPair<FIntPoint, ETileInteraction>& Move : Moves)
+		int32 DestX = Move.Key.X;
+		int32 DestY = Move.Key.Y;
+
+		float ThreatAtDest = State.ThreatMap.GetValue(DestX, DestY);
+		float BenefitAtDest = State.BenefitMap.GetValue(DestX, DestY);
+
+		float NetScore = BenefitAtDest - (ThreatAtDest * 2.0f * SafetyFactor);
+        
+		if (NetScore > (CurrentScore + 0.5f))
 		{
-			if (Move.Value != ETileInteraction::Move) continue;
-            
-			float ThreatAtDest = State.ThreatMap.GetValue(Move.Key.X, Move.Key.Y);
-			float BenefitAtDest = State.BenefitMap.GetValue(Move.Key.X, Move.Key.Y);
-            
-			float NetScore = BenefitAtDest - ThreatAtDest;
-			
-			NetScore += 10.0f; 
-
 			if (NetScore > BestTask.Score)
 			{
 				BestTask.TaskName = FName("Move");
@@ -284,6 +269,110 @@ FHTNTask UChessHTNPlanner::FindAnyMove(const FWorldState& State)
 			}
 		}
 	}
-	
+
 	return BestTask;
+}
+
+FHTNTask UChessHTNPlanner::FindAnyMove(const FWorldState& State)
+{
+	FHTNTask BestTask;
+	BestTask.TaskName = FName("None");
+	BestTask.Score = -99999.0f;
+	BestTask.Type = EHTNTaskType::Action;
+
+	if (!GridManager || !MyUnit) return BestTask;
+
+	TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(MyUnit);
+
+	for (const TPair<FIntPoint, ETileInteraction>& Move : Moves)
+	{
+		if (Move.Value != ETileInteraction::Move) continue;
+        
+		float ThreatAtDest = State.ThreatMap.GetValue(Move.Key.X, Move.Key.Y);
+		float BenefitAtDest = State.BenefitMap.GetValue(Move.Key.X, Move.Key.Y);
+        
+		float NetScore = BenefitAtDest - ThreatAtDest;
+        
+		NetScore += 10.0f; 
+
+		if (NetScore > BestTask.Score)
+		{
+			BestTask.TaskName = FName("Move");
+			BestTask.Type = EHTNTaskType::Action;
+			BestTask.TargetUnit = nullptr;
+			BestTask.TargetTile = Move.Key;
+			BestTask.Score = NetScore;
+		}
+	}
+    
+	return BestTask;
+}
+
+void UChessHTNPlanner::DrawDebugVisualization(UWorld* World, AChessGridManager* Grid, bool bDrawThreats, bool bDrawBenefits)
+{
+	if (!World || !Grid) return;
+
+	FlushPersistentDebugLines(World);
+
+	float TileSize = Grid->TileSize;
+	float ZOffset = 25.0f;
+    
+    float MaxThreat = 1.0f;
+    float MaxBenefit = 1.0f;
+
+    for (float Val : LastThreatMap.GridValues)
+    {
+        if (Val > MaxThreat) MaxThreat = Val;
+    }
+    for (float Val : LastBenefitMap.GridValues)
+    {
+        if (Val > MaxBenefit) MaxBenefit = Val;
+    }
+
+	for (int32 x = 0; x < Grid->BoardWidth; x++)
+	{
+		for (int32 y = 0; y < Grid->BoardHeight; y++)
+		{
+			FIntPoint GridPos(x, y);
+			FVector TileCenter = Grid->GridToWorld(GridPos);
+			TileCenter.Z += ZOffset;
+
+			if (bDrawThreats)
+			{
+				float ThreatVal = LastThreatMap.GetValue(x, y);
+				if (ThreatVal > 0)
+				{
+                    float Scale = ThreatVal / MaxThreat;
+                    
+                    float BoxSize = (TileSize * 0.1f) + (TileSize * 0.35f * Scale);
+                    
+					FVector Extent(BoxSize, BoxSize, 10.0f);
+					FColor Color = FColor::Red;
+                    Color = FLinearColor::LerpUsingHSV(FLinearColor::Yellow, FLinearColor::Red, Scale).ToFColor(true);
+
+					DrawDebugBox(World, TileCenter, Extent, Color, true, -1.0f, 0, 2.0f);
+					DrawDebugString(World, TileCenter + FVector(0,0,50), FString::Printf(TEXT("%.0f"), ThreatVal), nullptr, FColor::White, 0.0f, true);
+				}
+			}
+
+			if (bDrawBenefits)
+			{
+				float BenefitVal = LastBenefitMap.GetValue(x, y);
+				if (BenefitVal > 0)
+				{
+                    float Scale = BenefitVal / MaxBenefit;
+                    float BoxSize = (TileSize * 0.1f) + (TileSize * 0.35f * Scale);
+
+					FVector GreenCenter = TileCenter + FVector(15, 15, 20);
+					FVector Extent(BoxSize, BoxSize, 10.0f);
+					FColor Color = FColor::Green;
+                    
+                    Color = FLinearColor::LerpUsingHSV(FLinearColor::Blue, FLinearColor::Green, Scale).ToFColor(true);
+
+					DrawDebugBox(World, GreenCenter, Extent, Color, true, -1.0f, 0, 2.0f);
+					DrawDebugString(World, GreenCenter + FVector(0,0,50), FString::Printf(TEXT("%.0f"), BenefitVal), nullptr, FColor::White, 0.0f, true);
+				}
+			}
+		}
+	}
 }

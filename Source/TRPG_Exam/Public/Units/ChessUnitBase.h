@@ -11,6 +11,7 @@
 #include "GAS/ChessAttributeSet.h"
 #include "ChessUnitBase.generated.h"
 
+class AChessAIController;
 class AChessGridManager;
 
 USTRUCT(BlueprintType)
@@ -76,6 +77,12 @@ class TRPG_EXAM_API AChessUnitBase : public APawn, public IAbilitySystemInterfac
 public:
 	AChessUnitBase();
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Personality")
+	float Aggressiveness = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Personality")
+	float SelfPreservation = 1.0f; // High means high ELO
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
 	UAbilitySystemComponent* AbilitySystemComponent;
 
@@ -90,7 +97,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-public:
+public:	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid")
 	AChessGridManager* GridManager;
 	

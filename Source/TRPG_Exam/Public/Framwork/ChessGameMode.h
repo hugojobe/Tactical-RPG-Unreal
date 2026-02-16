@@ -38,6 +38,9 @@ public:
 	void EndPlayerTurn();
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
+	void EndEnemyTurn();
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
 	void StartEnemyTurn();
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
@@ -50,8 +53,11 @@ public:
 	void OnGameOver(EChessTeam WinningTeam);
 	
 	UFUNCTION(BlueprintNativeEvent, Category = "AI")
-	void ExecuteAIAction(AChessUnitBase* Unit, const FHTNTask& Task);
-	
-	UFUNCTION(BlueprintNativeEvent, Category = "AI")
-	void ComputeGlobalAI(FHTNTask& BestTask, AChessUnitBase& OutBestUnit);
+	void ComputeGlobalAI(FHTNTask& BestTask, AChessUnitBase*& OutBestUnit);
+
+	UFUNCTION(Exec)
+	void ShowAI();
+
+	UFUNCTION(Exec)
+	void HideAI();
 };

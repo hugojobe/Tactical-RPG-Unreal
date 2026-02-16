@@ -38,6 +38,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Personality")
 	float SelfPreservation = 1.0f; // High means high ELO
 
-private:
 	void PerformTask(const FHTNTask& Task);
+
+	virtual void OnPossess(APawn* InPawn) override;
 };

@@ -15,9 +15,24 @@ public:
 	
 	AChessUnitBase* MyUnit;
 	AChessGridManager* GridManager;
+
+	UPROPERTY(VisibleAnywhere, Category = "AI Debug")
+	FInfluenceMap LastThreatMap;
+
+	UPROPERTY(VisibleAnywhere, Category = "AI Debug")
+	FInfluenceMap LastBenefitMap;
+
+	void DrawDebugVisualization(UWorld* World, AChessGridManager* Grid, bool bDrawThreats, bool bDrawBenefits);
 	
 	float AggressionFactor = 1.0f;
 	float SafetyFactor = 1.0f;
+
+// MINIMAX
+	float Minimax(FVirtualBoard& Board, int32 Depth, float Alpha, float Beta, bool bMaximizingPlayer);
+	float EvaluateBoard(const FVirtualBoard& Board);
+	FVirtualBoard CreateVirtualBoard();
+	void GetLegalMoves(const FVirtualBoard& Board, EChessTeam Team, TArray<FVirtualMove>& OutMoves);
+	void ApplyMove(FVirtualBoard& Board, const FVirtualMove& Move);
 
 private:
 	void BuildInfluenceMaps(FWorldState& State);

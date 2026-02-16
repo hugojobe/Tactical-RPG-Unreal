@@ -1,6 +1,8 @@
 // By hugojobe.
 
 #include "Units/ChessUnitBase.h"
+
+#include "AI/ChessAIController.h"
 #include "Components/StaticMeshComponent.h"
 #include "Framwork/ChessGameMode.h"
 #include "Managers/ChessGridManager.h"
@@ -23,6 +25,16 @@ AChessUnitBase::AChessUnitBase()
 
 	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	Attributes = CreateDefaultSubobject<UChessAttributeSet>(TEXT("Attributes"));
+
+	if(Team == EChessTeam::Enemy)
+	{
+		AIControllerClass = AChessAIController::StaticClass();
+		AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	} else
+	{
+		AIControllerClass = nullptr;
+		AutoPossessAI = EAutoPossessAI::Disabled;
+	}
 }
 
 void AChessUnitBase::BeginPlay()
