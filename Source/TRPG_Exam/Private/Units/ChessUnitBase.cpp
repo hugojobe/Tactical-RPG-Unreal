@@ -2,6 +2,7 @@
 
 #include "Units/ChessUnitBase.h"
 #include "Components/StaticMeshComponent.h"
+#include "Managers/ChessGridManager.h"
 
 AChessUnitBase::AChessUnitBase()
 {
@@ -89,7 +90,8 @@ void AChessUnitBase::NotifyActorBeginCursorOver()
 	if (OnUnitHoverUpdated.IsBound())
 	{
 		OnUnitHoverUpdated.Broadcast(this);
-		ToggleUnitHUD(true, Team == EChessTeam::Enemy, this);
+		if (GridManager->SelectedUnit != this && !GridManager->IsUnitClicked)
+			ToggleUnitHUD(true, Team == EChessTeam::Enemy, this);
 	}
 }
 
@@ -100,7 +102,8 @@ void AChessUnitBase::NotifyActorEndCursorOver()
 	if (OnUnitHoverUpdated.IsBound())
 	{
 		OnUnitHoverUpdated.Broadcast(nullptr);
-		ToggleUnitHUD(false, Team == EChessTeam::Enemy, this);
+		if (GridManager->SelectedUnit != this && !GridManager->IsUnitClicked)
+			ToggleUnitHUD(false, Team == EChessTeam::Enemy, this);
 	}
 }
 

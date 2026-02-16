@@ -11,6 +11,8 @@
 #include "GAS/ChessAttributeSet.h"
 #include "ChessUnitBase.generated.h"
 
+class AChessGridManager;
+
 USTRUCT(BlueprintType)
 struct FMovementRule
 {
@@ -89,6 +91,9 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid")
+	AChessGridManager* GridManager;
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Grid")
 	FVector2D GridCoordinates;
 	

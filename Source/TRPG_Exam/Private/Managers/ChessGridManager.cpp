@@ -50,6 +50,7 @@ void AChessGridManager::RegisterStartingUnits()
 		
 		ChessUnit->OnUnitHoverUpdated.AddDynamic(this, &AChessGridManager::OnUnitHoverUpdated);
 		ChessUnit->OnUnitClicked.AddDynamic(this, &AChessGridManager::OnUnitClicked);
+		ChessUnit->GridManager = this;
 	}
 }
 
