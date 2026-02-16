@@ -1,0 +1,182 @@
+// By hugojobe.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Enums.h"
+#include "GameFramework/Actor.h"
+#include "Tiles/ChessTileBase.h"
+#include "Units/ChessUnitBase.h"
+#include "ChessGridManager.generated.h"
+
+class UTimelineComponent;
+class UCurveFloat;
+
+USTRUCT(BlueprintType)
+struct FUnitSpawnInfo
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EChessUnitType Type;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EChessTeam Team;
+};
+
+
+
+UCLASS()
+class TRPG_EXAM_API AChessGridManager : public AActor
+{
+	GENERATED_BODY()
+	
+public:	
+	AChessGridManager();
+
+protected:
+	virtual void BeginPlay() override;
+
+public:	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid Config")
+	float TileSize;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid Config")
+	int32 BoardWidth;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid Config")
+	int32 BoardHeight;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid State")
+	TMap<FIntPoint, AChessUnitBase*> GridMap;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game State")
+	ETurnState CurrentTurnActionState = ETurnState::Player;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game State")
+	ETurnState CurrentPlayerState = ETurnState::Player;
+
+// VISUAL CONFIG
+	UPROPERTY(EditAnywhere, Category = "Grid Visuals")
+	TSubclassOf<AChessTileBase> WhiteTileClass;
+	
+	UPROPERTY(EditAnywhere, Category = "Grid Visuals")
+	TSubclassOf<AChessTileBase> BlackTileClass;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid Visuals")
+	TMap<FIntPoint, AChessTileBase*> TileActors;
+	
+
+// HELPER FUNCTIONS
+	UFUNCTION(BlueprintCallable, Category = "Grid Logic")
+	FIntPoint WorldToGrid(FVector WorldPos);
+
+	UFUNCTION(BlueprintCallable, Category = "Grid Logic")
+	FVector GridToWorld(FIntPoint GridPos);
+
+	UFUNCTION(BlueprintCallable, Category = "Grid Logic")
+	void RegisterUnitAt(FIntPoint GridPos, AChessUnitBase* Unit);
+
+	UFUNCTION(BlueprintCallable, Category = "Grid Logic")
+	void ClearTile(FIntPoint GridPos);
+
+	UFUNCTION(BlueprintCallable, Category = "Grid Logic")
+	AChessUnitBase* GetUnitAt(FIntPoint GridPos);
+
+	UFUNCTION(BlueprintCallable, Category = "Grid Logic")
+	bool IsValidGridPos(FIntPoint GridPos);
+	
+	UFUNCTION(BlueprintCallable, Category = "CombatLogic")
+	TMap<FIntPoint, ETileInteraction> GetValidMoves(AChessUnitBase* Unit);
+
+	static bool IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase* TargetUnit);
+	
+// GAMEPLAY	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Logic")
+	AChessUnitBase* SelectedUnit;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Logic")
+	TMap<FIntPoint, ETileInteraction> HighlightedTiles;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CombatLogic")
+	bool IsUnitClicked;
+
+	UPROPERTY()
+	UTimelineComponent* MoveTimeline;
+
+	UPROPERTY()
+	UTimelineComponent* AttackTimeline;
+
+	UPROPERTY(EditAnywhere, Category = "Pieces Movement")
+	UCurveFloat* UnitMovementSpeedCurve;
+
+	UPROPERTY(EditAnywhere, Category = "Pieces Movement")
+    float UnitMovementTiltAngle = -10.0f;
+
+	UPROPERTY()
+	AChessUnitBase* MovingUnit;
+	FVector MoveStartLoc;
+	FVector MoveTargetLoc;
+
+	UPROPERTY(EditAnywhere, Category = "Combat Visuals")
+	UCurveFloat* AttackRushCurve;
+
+	UPROPERTY(EditAnywhere, Category = "Combat Visuals")
+	UCurveFloat* AttackBounceBackCurve;
+
+	AChessUnitBase* AttackerUnit;
+	AChessUnitBase* AttackTargetUnit;
+	FVector AttackStartPos;
+	FVector AttackerImpactPos;
+	FVector AttackerFinalTargetPos;
+    
+	bool bWillKillUnit;
+	EAttackPhase CurrentAttackPhase;
+
+	UFUNCTION()
+	void HandleMoveProgress(float Value);
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Pieces Movement")
+	void HandleMoveFinished();
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void HandleAttackProgress(float Value);
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Combat Visuals")
+	void HandleAttackFinished();
+	
+	void RegisterStartingUnits();
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void OnTileClicked(AChessTileBase* ClickedTile);
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void OnUnitHoverUpdated(AChessUnitBase* Unit);
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void OnUnitClicked(AChessUnitBase* Unit);
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void DeselectUnit();
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void HighlightTilesForUnit(AChessUnitBase* Unit);
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void AttackUnit(AChessUnitBase* Attacker, AChessUnitBase* TargetUnit);
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void MoveUnit(AChessUnitBase* Unit, FIntPoint Position);
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
+	void PlayerActionFinished();
+
+	UFUNCTION(BlueprintNativeEvent, Category = "Combat Feedback")
+	void PlayImpactFeedback(AChessUnitBase* Attacker, AChessUnitBase* Target, bool bIsFatal);
+
+// Editor Tools
+	UFUNCTION(CallInEditor, Category = "Grid Visuals")
+	void GenerateGrid();
+	
+	void ClearBoardVisuals();
+};

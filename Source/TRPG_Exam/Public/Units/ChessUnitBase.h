@@ -1,0 +1,139 @@
+// By hugojobe.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Enums.h"
+#include "GameFramework/Actor.h"
+#include "Engine/DataTable.h"
+#include "AbilitySystemInterface.h"
+#include "AbilitySystemComponent.h"
+#include "GAS/ChessAttributeSet.h"
+#include "ChessUnitBase.generated.h"
+
+USTRUCT(BlueprintType)
+struct FMovementRule
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EMovementStyle MovementStyle;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FVector2D> MoveVectors;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 RangeLimit = 8;
+};
+
+USTRUCT(BlueprintType)
+struct FUnitStats
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	int32 MaxHP;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Stats")
+	int32 CurrentHP;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Stats")
+	int32 Damage;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Stats")
+	int32 KillRpReward;
+};
+
+USTRUCT(BlueprintType)
+struct FChessUnitData : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balancing")
+	int32 MaxHP;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balancing")
+	int32 Damage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balancing")
+	int32 KillRpReward;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	FMovementRule MovementRule;
+};
+
+class AChessUnitBase;
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUnitHighlightUpdated, AChessUnitBase*, Unit);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUnitClicked, AChessUnitBase*, Unit);
+
+UCLASS()
+class TRPG_EXAM_API AChessUnitBase : public AActor, public IAbilitySystemInterface
+{
+	GENERATED_BODY()
+
+public:
+	AChessUnitBase();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
+	UAbilitySystemComponent* AbilitySystemComponent;
+
+	UPROPERTY()
+	UChessAttributeSet* Attributes;
+
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilitySystemComponent; }
+
+	UFUNCTION(BlueprintCallable, Category = "GAS")
+	void DealDamageTo(AChessUnitBase* Target);
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Grid")
+	FVector2D GridCoordinates;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	EChessUnitType UnitType;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Stats")
+	FUnitStats Stats;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	EChessTeam Team;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	FMovementRule MovementRule;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Setup")
+	UDataTable* UnitStatsTable;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Visuals")
+	UStaticMeshComponent* UnitMeshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Visuals")
+	USceneComponent* UnitHUD;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnUnitHighlightUpdated OnUnitHoverUpdated;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnUnitClicked OnUnitClicked;
+
+	UFUNCTION(BlueprintCallable, Category = "Setup")
+	void InitializeStats();
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Events")
+	void OnUnitClickedFeedback();
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Events")
+	void OnUnitUnclickedFeedback();
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Combat Logic")
+	void ToggleUnitHUD(bool Visible, bool IsEnemy, AChessUnitBase* SelectedInstigator);
+	
+protected:
+	virtual void NotifyActorBeginCursorOver() override;
+	virtual void NotifyActorEndCursorOver() override;
+	virtual void NotifyActorOnClicked(FKey ButtonPressed = EKeys::LeftMouseButton) override;
+};
+
