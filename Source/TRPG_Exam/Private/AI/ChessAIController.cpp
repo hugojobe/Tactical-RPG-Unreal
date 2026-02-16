@@ -26,7 +26,7 @@ void AChessAIController::OnPossess(APawn* InPawn)
 
 FHTNTask AChessAIController::GetPlan()
 {
-	FHTNTask NullPlan;
+	/*FHTNTask NullPlan;
 	NullPlan.TaskName = FName("None");
 	NullPlan.Score = -99999.0f;
 	NullPlan.Type = EHTNTaskType::Action;
@@ -34,12 +34,14 @@ FHTNTask AChessAIController::GetPlan()
 	if (!GridManager || !MyPawn || !HTNPlanner) return NullPlan;
 	
 	CurrentPlan = HTNPlanner->MakePlan();
+
+	if(!CurrentPlan.IsValid()) return NullPlan;*/	
 	return CurrentPlan;
 }
 
 void AChessAIController::PerformTask(const FHTNTask& Task)
 {
-	GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, FString::Printf(TEXT("Executing Task %s"), *Task.TaskName.ToString()));
+	UE_LOG(LogTemp, Warning, TEXT("[AI] %s performing task: %s"), *MyPawn->GetName(), *Task.TaskName.ToString());
 	
 	if (Task.TaskName == "Attack")
 	{

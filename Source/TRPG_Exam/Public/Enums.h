@@ -24,7 +24,8 @@ UENUM(BlueprintType)
 enum class EChessTeam : uint8
 {
 	Player  UMETA(DisplayName = "Player"),
-	Enemy   UMETA(DisplayName = "Enemy")
+	Enemy   UMETA(DisplayName = "Enemy"),
+	None	UMETA(DisplayName = "None")
 };
 
 UENUM(BlueprintType)

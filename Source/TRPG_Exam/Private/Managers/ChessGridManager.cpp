@@ -117,6 +117,12 @@ bool AChessGridManager::IsValidGridPos(FIntPoint GridPos)
 			GridPos.Y >= 0 && GridPos.Y < BoardHeight);
 }
 
+bool AChessGridManager::IsValidGridPos(const FIntPoint& Pos) const
+{
+	return (Pos.X >= 0 && Pos.X < BoardWidth &&
+			Pos.Y >= 0 && Pos.Y < BoardHeight);
+}
+
 void AChessGridManager::ClearBoardVisuals()
 {
 	for (const TPair<FIntPoint, AChessTileBase*>& TilePair : TileActors)
@@ -177,74 +183,26 @@ bool AChessGridManager::IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase
 
 TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(AChessUnitBase* Unit, bool bIncludeEmptyAttacks)
 {
-	TMap<FIntPoint, ETileInteraction> ValidMoves;
-	if (!Unit) return ValidMoves;
+	TMap<FIntPoint, ETileInteraction> Result;
+	if (!Unit) return Result;
 	
-	FMovementRule Rule = Unit->MovementRule;
-	FIntPoint StartPos = FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
+	TArray<FVirtualMove> RawMoves = {};
+	ChessMovementLogic::CalculateLegalMoves(
+		this,
+		FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y),
+		Unit->MovementRule,
+		Unit->Team,
+		RawMoves,
+		bIncludeEmptyAttacks
+	);
 	
-	if (Rule.MovementStyle == EMovementStyle::Pawn)
+	for (const FVirtualMove& VirtualMove : RawMoves)
 	{
-		int32 Dir = (Unit->Team == EChessTeam::Player) ? 1 : -1;
-		
-		FIntPoint Forward(StartPos.X, StartPos.Y + Dir);
-		FIntPoint Backward(StartPos.X, StartPos.Y - Dir);
-		
-		if (IsValidGridPos(Forward) && GetUnitAt(Forward) == nullptr)
-			ValidMoves.Add(Forward, ETileInteraction::Move);
-		if (IsValidGridPos(Backward) && GetUnitAt(Backward) == nullptr)
-			ValidMoves.Add(Backward, ETileInteraction::Move);
-		
-		
-		FIntPoint Attacks[] = {
-			FIntPoint(StartPos.X - 1, StartPos.Y + Dir),
-			FIntPoint(StartPos.X + 1, StartPos.Y + Dir)
-		};
-		
-		for (FIntPoint AttackPos : Attacks)
-		{
-			if (IsValidGridPos(AttackPos))
-			{
-				AChessUnitBase* Target = GetUnitAt(AttackPos);
-				if (bIncludeEmptyAttacks || (Target && IsEnemy(Unit, Target)))
-				{
-					ValidMoves.Add(AttackPos, ETileInteraction::Attack);
-				}
-			}
-		}
-		
-		return ValidMoves;
+		ETileInteraction Interaction = (VirtualMove.Type == EVirtualMoveType::Attack) ? ETileInteraction::Attack : ETileInteraction::Move;
+		Result.Add(VirtualMove.To, Interaction);
 	}
-	
-	for (FVector2D DirVectors : Rule.MoveVectors)
-	{
-		FIntPoint Dir(FMath::RoundToInt(DirVectors.X), FMath::RoundToInt(DirVectors.Y));
-		int32 Loops = (Rule.MovementStyle == EMovementStyle::Slide) ? Rule.RangeLimit + 1 : 2;
-		
-		for (int32 i = 1; i < Loops; i++)
-		{
-			FIntPoint CheckPos = StartPos + (Dir * i);
-			if (CheckPos == StartPos) continue;
-			if (!IsValidGridPos(CheckPos)) continue;
-			
-			AChessUnitBase* Occupant = GetUnitAt(CheckPos);
-			
-			if (Occupant == nullptr)
-			{
-				ValidMoves.Add(CheckPos, ETileInteraction::Move);
-			}
-			else
-			{
-				if (bIncludeEmptyAttacks || IsEnemy(Unit, Occupant))
-				{
-					ValidMoves.Add(CheckPos, ETileInteraction::Attack);
-				}
-				break;
-			}
-		}
-	}
-	
-	return ValidMoves;
+    
+	return Result;
 }
 
 void AChessGridManager::OnTileClicked_Implementation(AChessTileBase* ClickedTile)
@@ -258,7 +216,7 @@ void AChessGridManager::OnTileClicked_Implementation(AChessTileBase* ClickedTile
 	{
 		if (UnitOnTile == SelectedUnit)
 			DeselectUnit();
-		else
+		else if(UnitOnTile->Team != SelectedUnit->Team)
 			AttackUnit(SelectedUnit, UnitOnTile);
 	}
 	else
@@ -331,7 +289,7 @@ void AChessGridManager::HighlightTilesForUnit_Implementation(AChessUnitBase* Uni
 			{
 				for (const TPair<FIntPoint, ETileInteraction>& TileTuple : HighlightedTiles)
 				{
-					AChessTileBase* Tile = TileActors[TileTuple.Key];
+					AChessTileBase* Tile = TileActors.FindRef(TileTuple.Key);
 					if (Tile != nullptr)
 					{
 						Tile->SetHighlight(TileTuple.Value);
@@ -344,7 +302,7 @@ void AChessGridManager::HighlightTilesForUnit_Implementation(AChessUnitBase* Uni
 	{
 		for (const TPair<FIntPoint, AChessTileBase*>& Tile : TileActors)
 		{
-			Tile.Value->SetHighlight(ETileInteraction::None);
+			if (Tile.Value) Tile.Value->SetHighlight(ETileInteraction::None);
 		}
 		
 		SelectedUnit = nullptr;
@@ -578,4 +536,18 @@ void AChessGridManager::PlayerActionFinished_Implementation()
 		GameMode->CheckWinCondition();
 		GameMode->PlayerActionFinished(this);
 	}
+}
+
+bool AChessGridManager::IsTileOccupied(const FIntPoint& Pos) const
+{
+	return GridMap.FindRef(Pos) != nullptr;
+}
+
+EChessTeam AChessGridManager::GetTeamAt(const FIntPoint& Pos) const
+{
+	if (const AChessUnitBase* const FoundUnit = GridMap.FindRef(Pos))
+	{
+		if (FoundUnit) return (FoundUnit)->Team;
+	}
+	return EChessTeam::None;
 }

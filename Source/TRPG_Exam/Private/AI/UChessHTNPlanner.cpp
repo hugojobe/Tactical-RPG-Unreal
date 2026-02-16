@@ -1,378 +1,394 @@
 ﻿#include "AI/UChessHTNPlanner.h"
 
-FHTNTask UChessHTNPlanner::MakePlan()
+#include "Kismet/GameplayStatics.h"
+
+class VirtualBoardWrapper : public IChessBoardInterface
 {
+public:
+	const FVirtualBoard* VBoard;
+	int32 Width, Height;
+
+	VirtualBoardWrapper(const FVirtualBoard* InBoard, int32 W, int32 H) : VBoard(InBoard), Width(W), Height(H) {}
+
+	virtual bool IsValidGridPos(const FIntPoint& Pos) const override
+	{
+		return Pos.X >= 0 && Pos.X < Width && Pos.Y >= 0 && Pos.Y < Height;
+	}
+
+	virtual bool IsTileOccupied(const FIntPoint& Pos) const override
+	{
+		int32 UnitIdx = VBoard->GetUnitIndexAt(Pos);
+		return UnitIdx != -1 && VBoard->Units[UnitIdx].IsAlive();
+	}
+
+	virtual EChessTeam GetTeamAt(const FIntPoint& Pos) const override
+	{
+		int32 UnitIdx = VBoard->GetUnitIndexAt(Pos);
+		if (UnitIdx != -1 && VBoard->Units[UnitIdx].IsAlive())
+		{
+			return VBoard->Units[UnitIdx].Team;
+		}
+		return EChessTeam::None;
+	}
+};
+
+FHTNTask UChessHTNPlanner::MakePlan(const FVirtualBoard& InitialBoard)
+{
+		if (!GridManager || !MyUnit) return FHTNTask();
+
+	int32 SearchDepth = FMath::Clamp(FMath::RoundToInt(SafetyFactor * 15.0f), 1, 4);
+
+	int32 MyVirtualID = -1;
+	FIntPoint MyPos(MyUnit->GridCoordinates.X, MyUnit->GridCoordinates.Y);
 	
-
-	FWorldState State;
-	State.ThreatMap.Init(GridManager->BoardWidth, GridManager->BoardHeight);
-	State.BenefitMap.Init(GridManager->BoardWidth, GridManager->BoardHeight);
-
-	LastThreatMap.Init(GridManager->BoardWidth, GridManager->BoardHeight);
-	LastBenefitMap.Init(GridManager->BoardWidth, GridManager->BoardHeight);
-    
-	for (auto& Tile : GridManager->GridMap)
+	for (int32 i = 0; i < InitialBoard.Units.Num(); ++i)
 	{
-		if (AChessUnitBase* UnitOnTile = Tile.Value)
+		if (InitialBoard.Units[i].Pos == MyPos)
 		{
-			if (UnitOnTile->Team == MyUnit->Team) State.MyUnits.Add(UnitOnTile);
-			else State.EnemyUnits.Add(UnitOnTile);
+			MyVirtualID = i;
+			break;
 		}
 	}
-    
-	BuildInfluenceMaps(State);
 
-	LastThreatMap = State.ThreatMap;
-	LastBenefitMap = State.BenefitMap;
-    
-	FHTNTask BestPlan;
-	if (Method_WinGame(State, BestPlan))
-	{
-		return BestPlan;
-	}
+	if (MyVirtualID == -1) return FHTNTask();
 
-	return FHTNTask();
-}
-
-void UChessHTNPlanner::BuildInfluenceMaps(FWorldState& State)
-{
-	for (AChessUnitBase* Enemy : State.EnemyUnits)
-	{
-		TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(Enemy, true);
-		float ThreatValue = Enemy->Attributes->GetDamage();
-
-		for (auto& Move : Moves)
-		{
-			bool bIsThreat = false;
-			if (Enemy->MovementRule.MovementStyle == EMovementStyle::Pawn)
-			{
-				if (Move.Value == ETileInteraction::Attack)
-				{
-					bIsThreat = true;
-				}
-			}
-			else
-			{
-				if (Move.Value == ETileInteraction::Attack || Move.Value == ETileInteraction::Move)
-				{
-					bIsThreat = true;
-				}
-			}
-
-			if(bIsThreat)
-				State.ThreatMap.AddValue(Move.Key.X, Move.Key.Y, ThreatValue);
-		}
-	}
+	TArray<FVirtualMove> PossibleMoves;
+	GetLegalMovesForUnit(InitialBoard, MyVirtualID, PossibleMoves);
 	
-	float CenterX = GridManager->BoardWidth / 2.0f;
-	float CenterY = GridManager->BoardHeight / 2.0f;
-    
-	for (int x = 0; x < GridManager->BoardWidth; x++)
+	FVirtualMove BestMove;
+	float BestValue = -999999.0f;
+	float Alpha = -999999.0f;
+	float Beta = 999999.0f;
+
+	for (const FVirtualMove& Move : PossibleMoves)
 	{
-		for (int y = 0; y < GridManager->BoardHeight; y++)
+		if (bHasLastMove && MyPos == LastMoveDestination && Move.To == LastMoveSource)
 		{
-			float DistToCenter = FMath::Sqrt(FMath::Square(x - CenterX) + FMath::Square(y - CenterY));
-			float CenterBonus = FMath::Max(0.0f, 5.0f - DistToCenter);
-			State.BenefitMap.AddValue(x, y, CenterBonus);
+			continue;
+		}
+		
+		if (InitialBoard.Units[Move.UnitID].Pos != FIntPoint(MyUnit->GridCoordinates.X, MyUnit->GridCoordinates.Y))
+			continue;
+
+		FVirtualBoard NextState = InitialBoard;
+		ApplyMove(NextState, Move);
+
+		float MoveValue = Minimax(NextState, SearchDepth - 1, Alpha, Beta, false);
+		if (MoveValue > BestValue)
+		{
+			BestValue = MoveValue;
+			BestMove = Move;
+		}
+
+		Alpha = FMath::Max(Alpha, BestValue);
+	}
+
+	FHTNTask FinalTask;
+	if (BestValue > -99999.0f)
+	{
+	    FinalTask.Score = BestValue;
+
+	    AChessUnitBase* RealTarget = GridManager->GetUnitAt(BestMove.To);
+	    TMap<FIntPoint, ETileInteraction> RealMoves = GridManager->GetValidMoves(MyUnit, false);
+	    ETileInteraction* RealInteraction = RealMoves.Find(BestMove.To);
+
+	    if (BestMove.Type == EVirtualMoveType::Attack)
+	    {
+	        if (RealTarget)
+	        {
+	            FinalTask.TaskName = FName("Attack");
+	            FinalTask.TargetUnit = RealTarget;
+	            FinalTask.TargetTile = BestMove.To;
+	        }
+	        else if (RealInteraction && *RealInteraction == ETileInteraction::Move)
+	        {
+	            FinalTask.TaskName = FName("Move");
+	            FinalTask.TargetTile = BestMove.To;
+	        }
+	        else
+	        {
+	            bool bFound = false;
+	            for (const auto& Pair : RealMoves)
+	            {
+	                if (Pair.Value == ETileInteraction::Attack)
+	                {
+	                    AChessUnitBase* T = GridManager->GetUnitAt(Pair.Key);
+	                    if (T)
+	                    {
+	                        FinalTask.TaskName = FName("Attack");
+	                        FinalTask.TargetUnit = T;
+	                        FinalTask.TargetTile = Pair.Key;
+	                        FinalTask.Score = BestValue * 0.5f;
+	                        bFound = true;
+	                        break;
+	                    }
+	                }
+	            }
+	            if (!bFound)
+	            {
+	                for (const auto& Pair : RealMoves)
+	                {
+	                    if (Pair.Value == ETileInteraction::Move)
+	                    {
+	                        FinalTask.TaskName = FName("Move");
+	                        FinalTask.TargetTile = Pair.Key;
+	                        FinalTask.Score = BestValue * 0.1f;
+	                        bFound = true;
+	                        break;
+	                    }
+	                }
+	            }
+	            if (!bFound)
+	            {
+	                return FHTNTask();
+	            }
+	        }
+	    }
+	    else
+	    {
+	        if (RealInteraction && *RealInteraction == ETileInteraction::Move)
+	        {
+	            FinalTask.TaskName = FName("Move");
+	            FinalTask.TargetTile = BestMove.To;
+	        }
+	        else
+	        {
+	            return FHTNTask();
+	        }
+	    }
+
+	    FinalTask.Type = EHTNTaskType::Action;
+	}
+    
+	return FinalTask;
+}
+
+float UChessHTNPlanner::Minimax(FVirtualBoard& Board, int32 Depth, float Alpha, float Beta, bool bMaximizingPlayer)
+{
+	if (Depth == 0)
+	{
+		return EvaluateBoard(Board);
+	}
+
+	EChessTeam CurrentTeam = bMaximizingPlayer ? MyUnit->Team : (MyUnit->Team == EChessTeam::Player ? EChessTeam::Enemy : EChessTeam::Player);
+	
+	TArray<FVirtualMove> LegalMoves;
+	for (int32 i = 0; i < Board.Units.Num(); ++i)
+	{
+		if (Board.Units[i].Team == CurrentTeam && Board.Units[i].IsAlive())
+		{
+			GetLegalMovesForUnit(Board, i, LegalMoves);
 		}
 	}
+
+	if (LegalMoves.Num() == 0) return EvaluateBoard(Board);
 	
-	for (AChessUnitBase* Enemy : State.EnemyUnits)
+	if (LegalMoves.Num() == 0) return EvaluateBoard(Board);
+
+	if (bMaximizingPlayer)
 	{
-		FIntPoint Pos(Enemy->GridCoordinates.X, Enemy->GridCoordinates.Y);
-		State.BenefitMap.AddValue(Pos.X, Pos.Y, static_cast<float>(Enemy->Stats.KillRpReward));
-        
-		if (Enemy->UnitType == EChessUnitType::King)
+		float MaxEval = -999999.0f;
+		for (const FVirtualMove& Move : LegalMoves)
 		{
-			State.BenefitMap.AddValue(Pos.X, Pos.Y, 1000.0f);
+			FVirtualBoard NextState = Board;
+			ApplyMove(NextState, Move);
+            
+			float Eval = Minimax(NextState, Depth - 1, Alpha, Beta, false);
+			MaxEval = FMath::Max(MaxEval, Eval);
+			Alpha = FMath::Max(Alpha, Eval);
+            
+			if (Beta <= Alpha) break;
+		}
+		
+		return MaxEval;
+	}
+	else
+	{
+		float MinEval = 999999.0f;
+		for (const FVirtualMove& Move : LegalMoves)
+		{
+			FVirtualBoard NextState = Board;
+			ApplyMove(NextState, Move);
+            
+			float Eval = Minimax(NextState, Depth - 1, Alpha, Beta, true);
+			MinEval = FMath::Min(MinEval, Eval);
+			Beta = FMath::Min(Beta, Eval);
+            
+			if (Beta <= Alpha) break;
+		}
+		return MinEval;
+	}
+}
+
+float UChessHTNPlanner::EvaluateBoard(const FVirtualBoard& Board)
+{
+	float TotalScore = 0.0f;
+	int32 MyKingCount = 0;
+	int32 EnemyKingCount = 0;
+
+	TMap<FIntPoint, int32> EnemyAttackCount;
+	TMap<FIntPoint, int32> MyDefenseCount;
+	
+	VirtualBoardWrapper Wrapper(&Board, GridManager->BoardWidth, GridManager->BoardHeight);
+
+	for (const FVirtualUnit& U : Board.Units)
+	{
+		if (!U.IsAlive()) continue;
+		TArray<FVirtualMove> Moves;
+		ChessMovementLogic::CalculateLegalMoves(&Wrapper, U.Pos, U.MovementRule, U.Team, Moves, true);
+		for (const FVirtualMove& M : Moves)
+		{
+			if (U.Team == MyUnit->Team) MyDefenseCount.FindOrAdd(M.To)++;
+			else EnemyAttackCount.FindOrAdd(M.To)++;
 		}
 	}
-}
 
-bool UChessHTNPlanner::Method_WinGame(const FWorldState& State, FHTNTask& OutTask)
-{
-	if (Method_TryKillKing(State, OutTask)) return true;
+	for (const FVirtualUnit& Unit : Board.Units) {
+		if (!Unit.IsAlive()) continue;
 
-	if (Method_FindBestTrade(State, OutTask)) return true;
-
-	if (Method_PlaySafe(State, OutTask)) return true;
-
-	return false;
-}
-
-bool UChessHTNPlanner::Method_TryKillKing(const FWorldState& State, FHTNTask& OutTask)
-{
-	FHTNTask Task = FindBestAttack(State, true);
-	if (Task.IsValid())
-	{
-		OutTask = Task;
-		return true;
-	}
-	return false;
-}
-
-bool UChessHTNPlanner::Method_FindBestTrade(const FWorldState& State, FHTNTask& OutTask)
-{
-	FHTNTask Task = FindBestAttack(State, false);
-    
-	if (Task.IsValid() && Task.Score > 0.0f) 
-	{
-		OutTask = Task;
-		return true;
-	}
-	return false;
-}
-
-bool UChessHTNPlanner::Method_PlaySafe(const FWorldState& State, FHTNTask& OutTask)
-{
-	FHTNTask Task = FindSafeMove(State);
-	if (Task.IsValid())
-	{
-		OutTask = Task;
-		return true;
-	}
-
-	Task = FindAnyMove(State);
-	if(Task.IsValid())
-	{
-		OutTask = Task;
-		return true;
-	}
-
-	return false;
-}
-
-FHTNTask UChessHTNPlanner::FindBestAttack(const FWorldState& State, bool bPrioritizeKing)
-{
-	FHTNTask BestTask;
-	BestTask.TaskName = FName("None");
-	BestTask.Score = -99999.0f;
-	BestTask.Type = EHTNTaskType::Action;
-	
-	if (!MyUnit || !GridManager) return BestTask;
-
-	TMap<FIntPoint, ETileInteraction> PotentialMoves = GridManager->GetValidMoves(MyUnit);
-	if (PotentialMoves.IsEmpty()) return BestTask;
-	
-	for (const TPair<FIntPoint, ETileInteraction>& Move : PotentialMoves)
-    {
-        if (Move.Value != ETileInteraction::Attack) continue;
-
-        AChessUnitBase* Target = GridManager->GetUnitAt(Move.Key);
-        if (!Target) continue;
-		
-        if (bPrioritizeKing && Target->UnitType != EChessUnitType::King)
-            continue; 
-		
-        int32 MyDamage = MyUnit->Attributes->GetDamage();
-        int32 TargetHP = Target->Attributes->GetHealth();
-        int32 DeltaL = TargetHP - MyDamage;
-        bool bIsLethal = (DeltaL <= 0);
-		
-        float Score = 0.0f;
-		
-        float TargetValue = static_cast<float>(Target->Stats.KillRpReward);
-        float MyValue = static_cast<float>(MyUnit->Stats.KillRpReward);
-		
-		TargetValue *= AggressionFactor;
-
-		int32 DestX, DestY;
-		
-        if (bIsLethal)
-        {
-        	DestX = Move.Key.X;
-        	DestY = Move.Key.Y;
-        	
-            Score += TargetValue;
-        	
-        	if (Target->UnitType == EChessUnitType::King)
-        		Score += 10000.0f;
-        	else
-        		Score += 50.0f; 
-        	
-        	float ThreatAtDest = State.ThreatMap.GetValue(DestX, DestY);
-        	float BenefitAtDest = State.BenefitMap.GetValue(DestX, DestY);
-        	
-        	Score += BenefitAtDest;
-        	
-        	float EffectiveThreat = ThreatAtDest * SafetyFactor;
-            if (EffectiveThreat > 0)
-            {
-            	float TradeNetValue = TargetValue - (MyValue * 1.2f);
-            	Score -= (EffectiveThreat * 0.5f);
-            }
-        }
-        else
-        {
-        	DestX = MyUnit->GridCoordinates.X;
-        	DestY = MyUnit->GridCoordinates.Y;
-        	
-        	float DamageScore = static_cast<float>(MyDamage) * 10.0f;
-        	Score += DamageScore * AggressionFactor; 
-
-        	float ThreatAtOrigin = State.ThreatMap.GetValue(DestX, DestY);
-        	Score -= (ThreatAtOrigin * SafetyFactor);
-        }
-
-        if (Score > BestTask.Score)
-        {
-            BestTask.TaskName = FName("Attack");
-            BestTask.Type = EHTNTaskType::Action;
-            BestTask.TargetUnit = Target;
-            BestTask.TargetTile = Move.Key;
-            BestTask.Score = Score;
-        }
-    }
-
-    return BestTask;
-}
-
-FHTNTask UChessHTNPlanner::FindSafeMove(const FWorldState& State)
-{
-	FHTNTask BestTask;
-	BestTask.TaskName = FName("None");
-	BestTask.Score = -99999.0f;
-	BestTask.Type = EHTNTaskType::Action;
-
-	if (!GridManager || !MyUnit) return BestTask;
-
-	int32 StartX = MyUnit->GridCoordinates.X;
-	int32 StartY = MyUnit->GridCoordinates.Y;
-
-	float CurrentThreat = State.ThreatMap.GetValue(StartX, StartY);
-	float CurrentBenefit = State.BenefitMap.GetValue(StartX, StartY);
-	float CurrentScore = CurrentBenefit - (CurrentThreat * 2.0f * SafetyFactor);
-
-	TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(MyUnit);
-
-	for (const TPair<FIntPoint, ETileInteraction>& Move : Moves)
-	{
-		if (Move.Value != ETileInteraction::Move) continue;
-
-		int32 DestX = Move.Key.X;
-		int32 DestY = Move.Key.Y;
-
-		float ThreatAtDest = State.ThreatMap.GetValue(DestX, DestY);
-		float BenefitAtDest = State.BenefitMap.GetValue(DestX, DestY);
-
-		float NetScore = BenefitAtDest - (ThreatAtDest * 2.0f * SafetyFactor);
+		float MaterialValue = (Unit.Type == EChessUnitType::King) ? 30000.0f : static_cast<float>(Unit.KillReward);
+		float StatValue = MaterialValue + (Unit.HP * 2.0f) + (Unit.Damage * 5.0f);
         
-		if (NetScore > (CurrentScore + 0.5f))
+		int32 Attacks = EnemyAttackCount.FindRef(Unit.Pos);
+		int32 Defenders = MyDefenseCount.FindRef(Unit.Pos);
+		float CombatMod = 0.0f;
+
+		if (Unit.Team == MyUnit->Team) {
+			if (Unit.Type == EChessUnitType::King) MyKingCount++;
+			if (Attacks > Defenders) CombatMod -= (StatValue * 0.5f);
+            
+			if (LastMoveDestination == Unit.Pos) CombatMod -= 10.0f;
+		} else {
+			if (Unit.Type == EChessUnitType::King) EnemyKingCount++;
+			if (Defenders > Attacks) CombatMod += (StatValue * 0.3f);
+		}
+
+		float DistToCenter = FVector2D::Distance(FVector2D(Unit.Pos), FVector2D(GridManager->BoardWidth/2.0f, GridManager->BoardHeight/2.0f));
+		float PosBonus = FMath::Max(0.0f, 5.0f - DistToCenter) * 0.5f;
+
+		if (Unit.Team == MyUnit->Team) TotalScore += (StatValue + CombatMod + PosBonus);
+		else TotalScore -= ((StatValue * AggressionFactor) - CombatMod + PosBonus);
+	}
+
+	if (EnemyKingCount == 0) return 999999.0f;
+	if (MyKingCount == 0) return -999999.0f;
+	return TotalScore;
+}
+
+FVirtualBoard UChessHTNPlanner::CreateVirtualBoard()
+{
+	FVirtualBoard Board;
+    
+	TArray<AActor*> Actors;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), Actors);
+
+	int32 Index = 0;
+	for (AActor* ActorUnit : Actors)
+	{
+		AChessUnitBase* RealUnit = Cast<AChessUnitBase>(ActorUnit);
+
+		if (RealUnit->MovementRule.MoveVectors.Num() > 100) 
 		{
-			if (NetScore > BestTask.Score)
-			{
-				BestTask.TaskName = FName("Move");
-				BestTask.Type = EHTNTaskType::Action;
-				BestTask.TargetUnit = nullptr;
-				BestTask.TargetTile = Move.Key;
-				BestTask.Score = NetScore;
+			continue;
+		}
+		
+		if (RealUnit && RealUnit->Attributes->GetHealth() > 0 && !RealUnit->IsHidden())
+		{
+			FVirtualUnit VirtualUnit;
+			VirtualUnit.ID = Index;
+			VirtualUnit.Team = RealUnit->Team;
+			VirtualUnit.Type = RealUnit->UnitType;
+			VirtualUnit.HP = static_cast<int32>(RealUnit->Attributes->GetHealth());
+			VirtualUnit.Damage = static_cast<int32>(RealUnit->Attributes->GetDamage());
+			VirtualUnit.KillReward = RealUnit->Stats.KillRpReward;
+			VirtualUnit.MovementRule = RealUnit->MovementRule;
+			VirtualUnit.Pos = FIntPoint(RealUnit->GridCoordinates.X, RealUnit->GridCoordinates.Y);
+
+			Board.Units.Add(VirtualUnit);
+			Board.Grid.Add(VirtualUnit.Pos, Index);
+            
+			Index++;
+		}
+	}
+	return Board;
+}
+
+FVirtualBoard UChessHTNPlanner::CreateVirtualBoard(const TArray<AChessUnitBase*>& AllUnits)
+{
+	FVirtualBoard Board;
+	int32 Index = 0;
+
+	for (AChessUnitBase* RealUnit : AllUnits)
+	{
+		if (RealUnit && RealUnit->Attributes->GetHealth() > 0 && !RealUnit->IsHidden())
+		{
+			FVirtualUnit VirtualUnit;
+			VirtualUnit.ID = Index;
+			VirtualUnit.Team = RealUnit->Team;
+			VirtualUnit.Type = RealUnit->UnitType;
+			VirtualUnit.HP = static_cast<int32>(RealUnit->Attributes->GetHealth());
+			VirtualUnit.Damage = static_cast<int32>(RealUnit->Attributes->GetDamage());
+			VirtualUnit.KillReward = RealUnit->Stats.KillRpReward;
+			VirtualUnit.MovementRule = RealUnit->MovementRule;
+			VirtualUnit.Pos = FIntPoint(RealUnit->GridCoordinates.X, RealUnit->GridCoordinates.Y);
+
+			Board.Units.Add(VirtualUnit);
+			Board.Grid.Add(VirtualUnit.Pos, Index);
+			Index++;
+		}
+	}
+	return Board;
+}
+
+void UChessHTNPlanner::GetLegalMovesForUnit(const FVirtualBoard& Board, int32 UnitID, TArray<FVirtualMove>& OutMoves)
+{
+	if (!Board.Units.IsValidIndex(UnitID) || !Board.Units[UnitID].IsAlive()) return;
+
+	const FVirtualUnit& Unit = Board.Units[UnitID];
+	VirtualBoardWrapper Wrapper(&Board, GridManager->BoardWidth, GridManager->BoardHeight);
+
+	TArray<FVirtualMove> UnitMoves;
+	ChessMovementLogic::CalculateLegalMoves(
+		&Wrapper,
+		Unit.Pos,
+		Unit.MovementRule,
+		Unit.Team,
+		UnitMoves,
+		true
+	);
+	
+	for (FVirtualMove& M : UnitMoves)
+	{
+		M.UnitID = UnitID;
+		OutMoves.Add(M);
+	}
+}
+
+void UChessHTNPlanner::ApplyMove(FVirtualBoard& Board, const FVirtualMove& Move)
+{
+	Board.Grid.Remove(Move.From);
+	if (Move.Type == EVirtualMoveType::Attack) {
+		int32 TargetIdx = Board.GetUnitIndexAt(Move.To);
+		if (TargetIdx != -1) {
+			Board.Units[TargetIdx].HP -= Board.Units[Move.UnitID].Damage;
+
+			if (Board.Units[TargetIdx].HP <= 0) {
+				Board.Grid.Remove(Move.To);
 			}
 		}
 	}
 
-	return BestTask;
+	Board.Grid.Add(Move.To, Move.UnitID);
+    
+	if (Board.Units.IsValidIndex(Move.UnitID))
+	{
+		Board.Units[Move.UnitID].Pos = Move.To;
+	}
 }
 
-FHTNTask UChessHTNPlanner::FindAnyMove(const FWorldState& State)
+void UChessHTNPlanner::NotifyExecutedMove(const FIntPoint& From, const FIntPoint& To)
 {
-	FHTNTask BestTask;
-	BestTask.TaskName = FName("None");
-	BestTask.Score = -99999.0f;
-	BestTask.Type = EHTNTaskType::Action;
-
-	if (!GridManager || !MyUnit) return BestTask;
-
-	TMap<FIntPoint, ETileInteraction> Moves = GridManager->GetValidMoves(MyUnit);
-
-	for (const TPair<FIntPoint, ETileInteraction>& Move : Moves)
-	{
-		if (Move.Value != ETileInteraction::Move) continue;
-        
-		float ThreatAtDest = State.ThreatMap.GetValue(Move.Key.X, Move.Key.Y);
-		float BenefitAtDest = State.BenefitMap.GetValue(Move.Key.X, Move.Key.Y);
-        
-		float NetScore = BenefitAtDest - ThreatAtDest;
-        
-		NetScore += 10.0f; 
-
-		if (NetScore > BestTask.Score)
-		{
-			BestTask.TaskName = FName("Move");
-			BestTask.Type = EHTNTaskType::Action;
-			BestTask.TargetUnit = nullptr;
-			BestTask.TargetTile = Move.Key;
-			BestTask.Score = NetScore;
-		}
-	}
-    
-	return BestTask;
-}
-
-void UChessHTNPlanner::DrawDebugVisualization(UWorld* World, AChessGridManager* Grid, bool bDrawThreats, bool bDrawBenefits)
-{
-	if (!World || !Grid) return;
-
-	FlushPersistentDebugLines(World);
-
-	float TileSize = Grid->TileSize;
-	float ZOffset = 25.0f;
-    
-    float MaxThreat = 1.0f;
-    float MaxBenefit = 1.0f;
-
-    for (float Val : LastThreatMap.GridValues)
-    {
-        if (Val > MaxThreat) MaxThreat = Val;
-    }
-    for (float Val : LastBenefitMap.GridValues)
-    {
-        if (Val > MaxBenefit) MaxBenefit = Val;
-    }
-
-	for (int32 x = 0; x < Grid->BoardWidth; x++)
-	{
-		for (int32 y = 0; y < Grid->BoardHeight; y++)
-		{
-			FIntPoint GridPos(x, y);
-			FVector TileCenter = Grid->GridToWorld(GridPos);
-			TileCenter.Z += ZOffset;
-
-			if (bDrawThreats)
-			{
-				float ThreatVal = LastThreatMap.GetValue(x, y);
-				if (ThreatVal > 0)
-				{
-                    float Scale = ThreatVal / MaxThreat;
-                    
-                    float BoxSize = (TileSize * 0.1f) + (TileSize * 0.35f * Scale);
-                    
-					FVector Extent(BoxSize, BoxSize, 10.0f);
-					FColor Color = FColor::Red;
-                    Color = FLinearColor::LerpUsingHSV(FLinearColor::Yellow, FLinearColor::Red, Scale).ToFColor(true);
-
-					DrawDebugBox(World, TileCenter, Extent, Color, true, -1.0f, 0, 2.0f);
-					DrawDebugString(World, TileCenter + FVector(0,0,50), FString::Printf(TEXT("%.0f"), ThreatVal), nullptr, FColor::White, 0.0f, true);
-				}
-			}
-
-			if (bDrawBenefits)
-			{
-				float BenefitVal = LastBenefitMap.GetValue(x, y);
-				if (BenefitVal > 0)
-				{
-                    float Scale = BenefitVal / MaxBenefit;
-                    float BoxSize = (TileSize * 0.1f) + (TileSize * 0.35f * Scale);
-
-					FVector GreenCenter = TileCenter + FVector(15, 15, 20);
-					FVector Extent(BoxSize, BoxSize, 10.0f);
-					FColor Color = FColor::Green;
-                    
-                    Color = FLinearColor::LerpUsingHSV(FLinearColor::Blue, FLinearColor::Green, Scale).ToFColor(true);
-
-					DrawDebugBox(World, GreenCenter, Extent, Color, true, -1.0f, 0, 2.0f);
-					DrawDebugString(World, GreenCenter + FVector(0,0,50), FString::Printf(TEXT("%.0f"), BenefitVal), nullptr, FColor::White, 0.0f, true);
-				}
-			}
-		}
-	}
+	LastMoveSource = From;
+	LastMoveDestination = To;
+	bHasLastMove = true;
 }

@@ -11,8 +11,13 @@ AChessUnitBase::AChessUnitBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	Stats.MaxHP = 1;
-	Stats.CurrentHP = Stats.MaxHP;
-	Stats.Damage = 0;
+	Stats.CurrentHP = 1;
+	Stats.Damage = 1;
+	Stats.KillRpReward = 1;
+
+	MovementRule.MovementStyle = EMovementStyle::Pawn; 
+	MovementRule.MoveVectors.Empty(); 
+	MovementRule.RangeLimit = 0;
 
 	USceneComponent* SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = SceneRoot;
@@ -103,9 +108,19 @@ void AChessUnitBase::NotifyActorBeginCursorOver()
 	if (OnUnitHoverUpdated.IsBound())
 	{
 		OnUnitHoverUpdated.Broadcast(this);
-		AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode());
-		if (!GridManager->IsUnitClicked && GameMode->CurrentTurn == ETurnState::Player)
-			ToggleUnitHUD(true, Team == EChessTeam::Enemy, this);
+		AChessGameMode* GameMode = nullptr;
+		if (UWorld* World = GetWorld())
+		{
+			GameMode = Cast<AChessGameMode>(World->GetAuthGameMode());
+		}
+
+		if (GridManager && GameMode)
+		{
+			if (!GridManager->IsUnitClicked && GameMode->CurrentTurn == ETurnState::Player)
+			{
+				ToggleUnitHUD(true, Team == EChessTeam::Enemy, this);
+			}
+		}
 	}
 }
 

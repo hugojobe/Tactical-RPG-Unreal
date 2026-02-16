@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Enums.h"
+#include "AI/ChessMovementLogic.h"
 #include "GameFramework/Actor.h"
 #include "Tiles/ChessTileBase.h"
 #include "Units/ChessUnitBase.h"
@@ -27,7 +28,7 @@ struct FUnitSpawnInfo
 
 
 UCLASS()
-class TRPG_EXAM_API AChessGridManager : public AActor
+class TRPG_EXAM_API AChessGridManager : public AActor, public IChessBoardInterface
 {
 	GENERATED_BODY()
 	
@@ -171,6 +172,11 @@ public:
 	UFUNCTION(BlueprintNativeEvent, Category = "Combat Feedback")
 	void PlayImpactFeedback(AChessUnitBase* Attacker, AChessUnitBase* Target, bool bIsFatal);
 
+// CHESSBOARD INTERFACES
+	virtual bool IsValidGridPos(const FIntPoint& Pos) const override;
+	virtual bool IsTileOccupied(const FIntPoint& Pos) const override;
+	virtual EChessTeam GetTeamAt(const FIntPoint& Pos) const override;
+	
 // Editor Tools
 	UFUNCTION(CallInEditor, Category = "Grid Visuals")
 	void GenerateGrid();

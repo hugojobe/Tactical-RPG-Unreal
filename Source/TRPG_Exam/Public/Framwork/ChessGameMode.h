@@ -54,10 +54,4 @@ public:
 	
 	UFUNCTION(BlueprintNativeEvent, Category = "AI")
 	void ComputeGlobalAI(FHTNTask& BestTask, AChessUnitBase*& OutBestUnit);
-
-	UFUNCTION(Exec)
-	void ShowAI();
-
-	UFUNCTION(Exec)
-	void HideAI();
 };

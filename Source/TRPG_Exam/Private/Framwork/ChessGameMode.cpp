@@ -52,73 +52,91 @@ void AChessGameMode::StartEnemyTurn_Implementation()
 {	
 	CurrentTurn = ETurnState::Enemy;
 	GridManager->CurrentTurnActionState = ETurnState::Enemy;
-	
-	FHTNTask BestTask;
-	AChessUnitBase* BestUnit = nullptr;
-	
-	ComputeGlobalAI(BestTask, BestUnit);
-
-	if(!BestUnit || !BestTask.IsValid())
-	{
-		return;
-	}
-
-	AChessAIController* ChessAIC = Cast<AChessAIController>(BestUnit->GetController());
-	if (!ChessAIC)
-	{
-		return;
-	}
 
 	FTimerHandle TimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, ChessAIC, BestTask]()
-	{	
-		ChessAIC->PerformTask(BestTask);
+	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+	{
+		FHTNTask BestTask;
+		AChessUnitBase* BestUnit = nullptr;
+		ComputeGlobalAI(BestTask, BestUnit);
+
+		if(!BestUnit || !BestTask.IsValid())
+		{
+			return;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("[AI] Best task for this turn: %s with score %f by unit %s"), *BestTask.TaskName.ToString(), BestTask.Score, *BestUnit->GetName());
+
+		AChessAIController* ChessAIC = Cast<AChessAIController>(BestUnit->GetController());
+		if (!ChessAIC)
+		{
+			return;
+		}
+		
+		FTimerHandle EndTimerHandle;
+		GetWorld()->GetTimerManager().SetTimer(EndTimerHandle, [this, ChessAIC, BestTask]()
+		{	
+			ChessAIC->PerformTask(BestTask);
+		}, 1.0f, false);
 	}, 0.5f, false);
 }
 
 void AChessGameMode::ComputeGlobalAI_Implementation(FHTNTask& BestTask, AChessUnitBase*& OutBestUnit)
 {
 	FHTNTask BestGlobalTask;
-	BestGlobalTask.Score = -999999.0f;
+	BestGlobalTask.Score = -10000000.0f;
 	BestGlobalTask.Type = EHTNTaskType::Action;
 	
 	AChessUnitBase* BestComputedUnit = nullptr;
 	
 	if (!GridManager) return;
 	
-	
-	TArray<AActor*> AllUnits;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), AllUnits);
-	
-	for (AActor* Actor : AllUnits)
+	TArray<AActor*> ActorList;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), ActorList);
+    
+	TArray<AChessUnitBase*> AllBoardUnits;
+	TArray<AChessUnitBase*> EnemyUnitsThinking;
+
+	for (AActor* Actor : ActorList)
 	{
 		AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor);
-		if (Unit && Unit->Team == EChessTeam::Enemy && Unit->Attributes->GetHealth() > 0)
+		if (Unit && Unit->Attributes->GetHealth() > 0)
 		{
-			AChessAIController* ChessAIC = Cast<AChessAIController>(Unit->GetController());
-			if (!ChessAIC)
+			AllBoardUnits.Add(Unit);
+			if (Unit->Team == EChessTeam::Enemy && Unit->GetController())
 			{
-				continue;
-			}
-			
-			FWorldState State;
-			FHTNTask UnitTask = ChessAIC->HTNPlanner->MakePlan(); 
-
-			if (UnitTask.IsValid() && UnitTask.Score > BestGlobalTask.Score)
-			{
-				BestGlobalTask = UnitTask;
-				BestComputedUnit = Unit;
-				GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, "Task found!");
-			}
-			else
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, "No valid plan created");
+				EnemyUnitsThinking.Add(Unit);
 			}
 		}
 	}
 
+	UChessHTNPlanner* DummyPlanner = NewObject<UChessHTNPlanner>(); 
+	FVirtualBoard GlobalSnapshot = DummyPlanner->CreateVirtualBoard(AllBoardUnits);
+
+	FCriticalSection CriticalSection;
+
+	ParallelFor(EnemyUnitsThinking.Num(), [&](int32 Index)
+	{
+		AChessUnitBase* Unit = EnemyUnitsThinking[Index];
+		AChessAIController* AIC = Cast<AChessAIController>(Unit->GetController());
+        
+		if (AIC && AIC->HTNPlanner)
+		{
+			FHTNTask UnitTask = AIC->HTNPlanner->MakePlan(GlobalSnapshot);
+
+			FScopeLock Lock(&CriticalSection);
+			if (UnitTask.IsValid() && UnitTask.Score > BestGlobalTask.Score)
+			{
+				BestGlobalTask = UnitTask;
+				BestComputedUnit = Unit;
+			}
+		}
+	});
+
 	BestTask = BestGlobalTask;
 	OutBestUnit = BestComputedUnit;
+
+	UE_LOG(LogTemp, Warning, TEXT("[AI] Global: Multithreaded computation finished. Best: %s"), BestComputedUnit ? *BestComputedUnit->GetName() : TEXT("None"));
 }
 
 void AChessGameMode::StartPlayerTurn_Implementation()
@@ -182,32 +200,4 @@ void AChessGameMode::CheckWinCondition_Implementation()
 	}
 }
 
-void AChessGameMode::OnGameOver_Implementation(EChessTeam WinningTeam)
-{
-}
-
-void AChessGameMode::ShowAI()
-{
-	TArray<AActor*> Units;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), Units);
-
-	for (AActor* Actor : Units)
-	{
-		AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor);
-		if (Unit && Unit->Team == EChessTeam::Enemy)
-		{
-			AChessAIController* AIC = Cast<AChessAIController>(Unit->GetController());
-			if (AIC && AIC->HTNPlanner)
-			{
-				AIC->HTNPlanner->DrawDebugVisualization(GetWorld(), GridManager, true, true);
-				return;
-			}
-		}
-	}
-}
-
-void AChessGameMode::HideAI()
-{
-	FlushPersistentDebugLines(GetWorld());
-}
-
+void AChessGameMode::OnGameOver_Implementation(EChessTeam WinningTeam) {}
