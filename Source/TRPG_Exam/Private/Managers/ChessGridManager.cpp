@@ -216,7 +216,7 @@ void AChessGridManager::OnTileClicked_Implementation(AChessTileBase* ClickedTile
 	{
 		if (UnitOnTile == SelectedUnit)
 			DeselectUnit();
-		else if(UnitOnTile->Team != SelectedUnit->Team)
+		else if(UnitOnTile->Team != SelectedUnit->Team && HighlightedTiles.Find(TilePos) != nullptr)
 			AttackUnit(SelectedUnit, UnitOnTile);
 	}
 	else

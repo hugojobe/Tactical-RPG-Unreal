@@ -34,9 +34,12 @@ public:
 
 FHTNTask UChessHTNPlanner::MakePlan(const FVirtualBoard& InitialBoard)
 {
-		if (!GridManager || !MyUnit) return FHTNTask();
+	if (!GridManager || !MyUnit) return FHTNTask();
+	
+	KillerMoves.Empty();
+	TranspositionTable.Empty();
 
-	int32 SearchDepth = FMath::Clamp(FMath::RoundToInt(SafetyFactor * 15.0f), 1, 4);
+	int32 SearchDepth = FMath::Clamp(FMath::RoundToInt(SafetyFactor * 6.0f), 6, 15);
 
 	int32 MyVirtualID = -1;
 	FIntPoint MyPos(MyUnit->GridCoordinates.X, MyUnit->GridCoordinates.Y);
@@ -165,13 +168,21 @@ FHTNTask UChessHTNPlanner::MakePlan(const FVirtualBoard& InitialBoard)
 
 float UChessHTNPlanner::Minimax(FVirtualBoard& Board, int32 Depth, float Alpha, float Beta, bool bMaximizingPlayer)
 {
+	uint64 BoardHash = GetBoardHash(Board);
+	if (TranspositionTable.Contains(BoardHash))
+	{
+		return TranspositionTable[BoardHash];
+	}
+
 	if (Depth == 0)
 	{
-		return EvaluateBoard(Board);
+		float Eval = EvaluateBoard(Board);
+		TranspositionTable.Add(BoardHash, Eval);
+		return Eval;
 	}
 
 	EChessTeam CurrentTeam = bMaximizingPlayer ? MyUnit->Team : (MyUnit->Team == EChessTeam::Player ? EChessTeam::Enemy : EChessTeam::Player);
-	
+
 	TArray<FVirtualMove> LegalMoves;
 	for (int32 i = 0; i < Board.Units.Num(); ++i)
 	{
@@ -181,9 +192,14 @@ float UChessHTNPlanner::Minimax(FVirtualBoard& Board, int32 Depth, float Alpha, 
 		}
 	}
 
-	if (LegalMoves.Num() == 0) return EvaluateBoard(Board);
-	
-	if (LegalMoves.Num() == 0) return EvaluateBoard(Board);
+	if (LegalMoves.Num() == 0)
+	{
+		float Eval = EvaluateBoard(Board);
+		TranspositionTable.Add(BoardHash, Eval);
+		return Eval;
+	}
+
+	SortMovesByHeuristic(LegalMoves, Board, Depth);
 
 	if (bMaximizingPlayer)
 	{
@@ -192,14 +208,19 @@ float UChessHTNPlanner::Minimax(FVirtualBoard& Board, int32 Depth, float Alpha, 
 		{
 			FVirtualBoard NextState = Board;
 			ApplyMove(NextState, Move);
-            
+
 			float Eval = Minimax(NextState, Depth - 1, Alpha, Beta, false);
 			MaxEval = FMath::Max(MaxEval, Eval);
 			Alpha = FMath::Max(Alpha, Eval);
-            
-			if (Beta <= Alpha) break;
+
+			if (Alpha >= Beta)
+			{
+				KillerMoves.FindOrAdd(Depth) = {Move, Depth};
+				break;
+			}
 		}
-		
+
+		TranspositionTable.Add(BoardHash, MaxEval);
 		return MaxEval;
 	}
 	else
@@ -209,13 +230,19 @@ float UChessHTNPlanner::Minimax(FVirtualBoard& Board, int32 Depth, float Alpha, 
 		{
 			FVirtualBoard NextState = Board;
 			ApplyMove(NextState, Move);
-            
+
 			float Eval = Minimax(NextState, Depth - 1, Alpha, Beta, true);
 			MinEval = FMath::Min(MinEval, Eval);
 			Beta = FMath::Min(Beta, Eval);
-            
-			if (Beta <= Alpha) break;
+
+			if (Alpha >= Beta)
+			{
+				KillerMoves.FindOrAdd(Depth) = {Move, Depth};
+				break;
+			}
 		}
+
+		TranspositionTable.Add(BoardHash, MinEval);
 		return MinEval;
 	}
 }
@@ -226,6 +253,9 @@ float UChessHTNPlanner::EvaluateBoard(const FVirtualBoard& Board)
 	int32 MyKingCount = 0;
 	int32 EnemyKingCount = 0;
 
+	FIntPoint MyKingPos = FIntPoint(-1, -1);
+	FIntPoint EnemyKingPos = FIntPoint(-1, -1);
+
 	TMap<FIntPoint, int32> EnemyAttackCount;
 	TMap<FIntPoint, int32> MyDefenseCount;
 	
@@ -234,44 +264,94 @@ float UChessHTNPlanner::EvaluateBoard(const FVirtualBoard& Board)
 	for (const FVirtualUnit& U : Board.Units)
 	{
 		if (!U.IsAlive()) continue;
+  
 		TArray<FVirtualMove> Moves;
 		ChessMovementLogic::CalculateLegalMoves(&Wrapper, U.Pos, U.MovementRule, U.Team, Moves, true);
+  
 		for (const FVirtualMove& M : Moves)
+		{if (U.Team == MyUnit->Team) 
+			MyDefenseCount.FindOrAdd(M.To)++;
+		else 
+			EnemyAttackCount.FindOrAdd(M.To)++;
+		}
+  
+		if (U.Type == EChessUnitType::King)
 		{
-			if (U.Team == MyUnit->Team) MyDefenseCount.FindOrAdd(M.To)++;
-			else EnemyAttackCount.FindOrAdd(M.To)++;
+			if (U.Team == MyUnit->Team)
+			{
+				MyKingPos = U.Pos;
+				MyKingCount++;
+			}
+			else
+			{
+				EnemyKingPos = U.Pos;
+				EnemyKingCount++;
+			}
 		}
 	}
 
-	for (const FVirtualUnit& Unit : Board.Units) {
+	for (const FVirtualUnit& Unit : Board.Units)
+	{
 		if (!Unit.IsAlive()) continue;
-
-		float MaterialValue = (Unit.Type == EChessUnitType::King) ? 30000.0f : static_cast<float>(Unit.KillReward);
-		float StatValue = MaterialValue + (Unit.HP * 2.0f) + (Unit.Damage * 5.0f);
-        
+  
+		float MaterialValue = (Unit.Type == EChessUnitType::King) ? 50000.0f : static_cast<float>(Unit.KillReward * 100);
+		float StatValue = MaterialValue + (Unit.HP * 3.0f) + (Unit.Damage * 8.0f);
+  
 		int32 Attacks = EnemyAttackCount.FindRef(Unit.Pos);
 		int32 Defenders = MyDefenseCount.FindRef(Unit.Pos);
 		float CombatMod = 0.0f;
-
-		if (Unit.Team == MyUnit->Team) {
-			if (Unit.Type == EChessUnitType::King) MyKingCount++;
-			if (Attacks > Defenders) CombatMod -= (StatValue * 0.5f);
-            
-			if (LastMoveDestination == Unit.Pos) CombatMod -= 10.0f;
-		} else {
-			if (Unit.Type == EChessUnitType::King) EnemyKingCount++;
-			if (Defenders > Attacks) CombatMod += (StatValue * 0.3f);
+  
+		if (Unit.Team == MyUnit->Team)
+		{
+			if (Unit.Type == EChessUnitType::King)
+			{
+				if (Attacks > 0)
+				{
+					if (Defenders > Attacks)
+						TotalScore += 5000.0f;
+					else
+						TotalScore -= 8000.0f;
+				}
+			}
+   
+			if (Attacks > Defenders)
+			{
+				CombatMod -= (StatValue * 0.6f);
+			}
+			else if (Defenders > Attacks && Attacks > 0)
+			{
+				CombatMod += (StatValue * 0.3f); 
+			}
+   
+			if (MyKingPos != FIntPoint(-1, -1))
+			{
+				float DistToKing = FVector2D::Distance(FVector2D(Unit.Pos), FVector2D(MyKingPos));
+				if (DistToKing <= 2.0f)
+					CombatMod += 200.0f;
+			}
+   
+			TotalScore += (StatValue + CombatMod);
 		}
-
-		float DistToCenter = FVector2D::Distance(FVector2D(Unit.Pos), FVector2D(GridManager->BoardWidth/2.0f, GridManager->BoardHeight/2.0f));
-		float PosBonus = FMath::Max(0.0f, 5.0f - DistToCenter) * 0.5f;
-
-		if (Unit.Team == MyUnit->Team) TotalScore += (StatValue + CombatMod + PosBonus);
-		else TotalScore -= ((StatValue * AggressionFactor) - CombatMod + PosBonus);
+		else
+		{
+			if (Unit.Type == EChessUnitType::King)
+			{
+				if (Defenders > 0)
+					TotalScore += 3000.0f;
+			}
+   
+			if (Defenders > Attacks)
+			{
+				CombatMod += (StatValue * 0.4f);
+			}
+   
+			TotalScore -= ((StatValue * AggressionFactor) - CombatMod);
+		}
 	}
 
 	if (EnemyKingCount == 0) return 999999.0f;
 	if (MyKingCount == 0) return -999999.0f;
+ 
 	return TotalScore;
 }
 
@@ -392,3 +472,85 @@ void UChessHTNPlanner::NotifyExecutedMove(const FIntPoint& From, const FIntPoint
 	LastMoveDestination = To;
 	bHasLastMove = true;
 }
+
+uint64 UChessHTNPlanner::GetBoardHash(const FVirtualBoard& Board) const
+{
+	uint64 Hash = 0;
+	for (const FVirtualUnit& Unit : Board.Units)
+	{
+		if(!Unit.IsAlive()) continue;
+		Hash ^= (static_cast<uint64>(Unit.ID) << 16) ^ (static_cast<uint64>(Unit.Pos.X) << 8) ^ static_cast<uint64>(Unit.Pos.Y);
+		Hash ^= (static_cast<uint64>(Unit.HP) << 24) ^ (static_cast<uint64>(Unit.Team) << 32);
+	}
+	return Hash;
+}
+
+void UChessHTNPlanner::SortMovesByHeuristic(TArray<FVirtualMove>& Moves, const FVirtualBoard& Board, int32 Depth)
+{
+	Moves.Sort([this, &Board, Depth](const FVirtualMove& A, const FVirtualMove& B) {
+		return GetMoveScore(A, Board, Depth) > GetMoveScore(B, Board, Depth);
+	});
+}
+
+float UChessHTNPlanner::GetMoveScore(const FVirtualMove& Move, const FVirtualBoard& Board, int32 Depth) const
+{
+	float Score = 0.0f;
+
+	if (KillerMoves.Contains(Depth) && KillerMoves[Depth].Move.To == Move.To)
+	{
+		Score += 1000.0f;
+	}
+
+	if (Move.Type == EVirtualMoveType::Attack)
+	{
+		int32 TargetIdx = Board.GetUnitIndexAt(Move.To);
+		if (TargetIdx != -1)
+		{
+			const FVirtualUnit& Target = Board.Units[TargetIdx];
+			float TargetValue = (Target.Type == EChessUnitType::King) ? 30000.0f : (float)Target.KillReward;
+			Score += TargetValue * 0.5f;
+			
+			int32 AttackerIdx = Move.UnitID;
+			int32 DefenderCount = 0;
+			for (const FVirtualUnit& U : Board.Units)
+			{
+				if (U.Team == Target.Team && U.IsAlive())
+				{
+					VirtualBoardWrapper Wrapper(&Board, GridManager->BoardWidth, GridManager->BoardHeight);
+					TArray<FVirtualMove> DefenderMoves;
+					ChessMovementLogic::CalculateLegalMoves(&Wrapper, U.Pos, U.MovementRule, U.Team, DefenderMoves, true);
+					for (const FVirtualMove& DM : DefenderMoves)
+					{
+						if (DM.To == Move.To) DefenderCount++;
+					}
+				}
+			}
+			if (DefenderCount == 0) Score += 500.0f;
+		}
+	}
+	else
+	{
+		float DistToCenter = FVector2D::Distance(
+			FVector2D(Move.To),
+			FVector2D(GridManager->BoardWidth / 2.0f, GridManager->BoardHeight / 2.0f)
+		);
+		Score += FMath::Max(0.0f, 5.0f - DistToCenter) * 10.0f;
+	}
+
+	int32 EnemyThreats = 0;
+	for (const FVirtualUnit& U : Board.Units)
+	{
+		if (U.Team != Board.Units[Move.UnitID].Team && U.IsAlive())
+		{
+			if (FVector2D::Distance(FVector2D(Move.To), FVector2D(U.Pos)) < 3.0f)
+			{
+				EnemyThreats++;
+			}
+		}
+	}
+	if (EnemyThreats > 0) Score -= EnemyThreats * 100.0f;
+
+	return Score;
+}
+
+

@@ -38,4 +38,17 @@ public:
 	FVirtualBoard CreateVirtualBoard(const TArray<AChessUnitBase*>& AllUnits);
 	void GetLegalMovesForUnit(const FVirtualBoard& Board, int32 UnitID, TArray<FVirtualMove>& OutMoves);
 	void ApplyMove(FVirtualBoard& Board, const FVirtualMove& Move);
+
+	struct FKillerMove
+	{
+		FVirtualMove Move;
+		int32 Depth;
+	};
+	
+	TMap<int32, FKillerMove> KillerMoves;
+	TMap<uint64, float> TranspositionTable;
+	
+	uint64 GetBoardHash(const FVirtualBoard& Board) const;
+	void SortMovesByHeuristic(TArray<FVirtualMove>& Moves, const FVirtualBoard& Board, int32 Depth);
+	float GetMoveScore(const FVirtualMove& Move, const FVirtualBoard& Board, int32 Depth) const;
 };
