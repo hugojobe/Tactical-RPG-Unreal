@@ -2,10 +2,10 @@
 
 
 #include "Framwork/ChessGameMode.h"
-
 #include "AI/ChessAIController.h"
-#include "AI/UChessHTNPlanner.h"
+#include "AI/ChessAIPlanner.h"
 #include "Kismet/GameplayStatics.h"
+#include "DrawDebugHelpers.h"
 #include "Managers/ChessGridManager.h"
 
 AChessGameMode::AChessGameMode() {}
@@ -15,8 +15,40 @@ void AChessGameMode::BeginPlay()
 	Super::BeginPlay();
 	
 	GridManager = Cast<AChessGridManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AChessGridManager::StaticClass()));
+	GridManager->GameMode = this;
+	GridManager->Initialize();
 	
-	StartPlayerTurn();
+	FTimerHandle TimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+	{
+		GenerateVirtualBoard();
+		GenerateThreatMap();
+		StartPlayerTurn();
+	}, 0.5f, false);
+}
+
+void AChessGameMode::GenerateVirtualBoard_Implementation()
+{
+	VirtualBoard = nullptr;
+	VirtualBoard = UChessAIPlanner::GenerateVirtualBoard(GridManager);
+	
+	if (bDisplayVirtualBoard)
+	{
+		DisplayVirtualBoard();
+		DisplayVirtualBoard();
+	}
+}
+
+void AChessGameMode::GenerateThreatMap_Implementation()
+{
+	ThreatMap.Empty();
+	ThreatMap = UChessAIPlanner::GenerateThreatMap(GridManager);
+	
+	if (bDisplayThreatMap)
+	{
+		DisplayThreatMap();
+		DisplayThreatMap();
+	}
 }
 
 void AChessGameMode::PlayerActionFinished_Implementation(AChessGridManager* Manager)
@@ -35,7 +67,12 @@ void AChessGameMode::EndPlayerTurn_Implementation()
 	
 	CurrentTurn = ETurnState::Enemy;
 	GridManager->CurrentTurnActionState = ETurnState::None;
-	StartEnemyTurn();
+	
+	GenerateVirtualBoard();
+	GenerateThreatMap();
+	
+	//StartEnemyTurn();
+	StartPlayerTurn();
 }
 
 void AChessGameMode::EndEnemyTurn_Implementation()
@@ -56,16 +93,14 @@ void AChessGameMode::StartEnemyTurn_Implementation()
 	FTimerHandle TimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
 	{
-		FHTNTask BestTask;
+		FChessDecision BestDecision;
 		AChessUnitBase* BestUnit = nullptr;
-		ComputeGlobalAI(BestTask, BestUnit);
+		ComputeGlobalAI(BestDecision, BestUnit);
 
-		if(!BestUnit || !BestTask.IsValid())
-		{
+		if(!BestUnit)
 			return;
-		}
 
-		UE_LOG(LogTemp, Warning, TEXT("[AI] Best task for this turn: %s with score %f by unit %s"), *BestTask.TaskName.ToString(), BestTask.Score, *BestUnit->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("[AI] Best task for this turn with score %f by unit %s"), BestDecision.Score, *BestUnit->GetName());
 
 		AChessAIController* ChessAIC = Cast<AChessAIController>(BestUnit->GetController());
 		if (!ChessAIC)
@@ -74,20 +109,20 @@ void AChessGameMode::StartEnemyTurn_Implementation()
 		}
 		
 		FTimerHandle EndTimerHandle;
-		GetWorld()->GetTimerManager().SetTimer(EndTimerHandle, [this, ChessAIC, BestTask]()
+		GetWorld()->GetTimerManager().SetTimer(EndTimerHandle, [this, ChessAIC, BestDecision]()
 		{	
-			ChessAIC->PerformTask(BestTask);
+			ChessAIC->PerformTask(BestDecision);
 		}, 1.0f, false);
 	}, 0.5f, false);
 }
 
-void AChessGameMode::ComputeGlobalAI_Implementation(FHTNTask& BestTask, AChessUnitBase*& OutBestUnit)
+void AChessGameMode::ComputeGlobalAI_Implementation(FChessDecision& BestTask, AChessUnitBase*& OutBestUnit)
 {
-	FHTNTask BestGlobalTask;
-	BestGlobalTask.Score = -10000000.0f;
-	BestGlobalTask.Type = EHTNTaskType::Action;
+	FChessDecision BestDecision;
+	BestDecision.Type = EChessDecisionType::Null;
+	BestDecision.Score = -BIG_NUMBER;
 	
-	AChessUnitBase* BestComputedUnit = nullptr;
+	AChessUnitBase* BestUnit = nullptr;
 	
 	if (!GridManager) return;
 	
@@ -110,9 +145,6 @@ void AChessGameMode::ComputeGlobalAI_Implementation(FHTNTask& BestTask, AChessUn
 		}
 	}
 
-	UChessHTNPlanner* DummyPlanner = NewObject<UChessHTNPlanner>(); 
-	FVirtualBoard GlobalSnapshot = DummyPlanner->CreateVirtualBoard(AllBoardUnits);
-
 	FCriticalSection CriticalSection;
 
 	ParallelFor(EnemyUnitsThinking.Num(), [&](int32 Index)
@@ -120,23 +152,130 @@ void AChessGameMode::ComputeGlobalAI_Implementation(FHTNTask& BestTask, AChessUn
 		AChessUnitBase* Unit = EnemyUnitsThinking[Index];
 		AChessAIController* AIC = Cast<AChessAIController>(Unit->GetController());
         
-		if (AIC && AIC->HTNPlanner)
+		if (AIC && AIC->AIPlanner)
 		{
-			FHTNTask UnitTask = AIC->HTNPlanner->MakePlan(GlobalSnapshot);
+			FChessDecision UnitDecision = AIC->AIPlanner->GetUnitDecision();
 
 			FScopeLock Lock(&CriticalSection);
-			if (UnitTask.IsValid() && UnitTask.Score > BestGlobalTask.Score)
+			if (UnitDecision.Score > BestDecision.Score)
 			{
-				BestGlobalTask = UnitTask;
-				BestComputedUnit = Unit;
+				BestDecision = UnitDecision;
+				BestUnit = Unit;
 			}
 		}
 	});
 
-	BestTask = BestGlobalTask;
-	OutBestUnit = BestComputedUnit;
+	BestTask = BestDecision;
+	OutBestUnit = BestUnit;
 
-	UE_LOG(LogTemp, Warning, TEXT("[AI] Global: Multithreaded computation finished. Best: %s"), BestComputedUnit ? *BestComputedUnit->GetName() : TEXT("None"));
+	UE_LOG(LogTemp, Warning, TEXT("[AI] Global: Multithreaded computation finished. Best: %s"), BestUnit ? *BestUnit->GetName() : TEXT("None"));
+}
+
+void AChessGameMode::DisplayVirtualBoard()
+{
+	if (!bDisplayVirtualBoard)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("Displaying Virtual Board"));
+		}
+		
+		FVector HalfExtent = FVector(100 / 2.0f, 100 / 2.0f, 1.0f);
+		
+		for (auto Tile : GridManager->TileActors)
+		{
+			bool IsOccupied = VirtualBoard->Units.Find(Tile.Key) != nullptr;
+			
+			DrawDebugSolidBox(
+				GetWorld(),
+				Tile.Value->GetActorLocation() + FVector(0, 0, 5),
+				HalfExtent,
+				FColor(0, 0, 0, IsOccupied ? 200 : 50),
+				true,
+				0
+			);
+		}
+		
+		bDisplayVirtualBoard = true;
+	}
+	else
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("Hiding Virtual Board"));
+		}
+		
+		FlushPersistentDebugLines(GetWorld());
+		bDisplayVirtualBoard = false;
+	}
+}
+
+void AChessGameMode::DisplayThreatMap()
+{
+	if (!bDisplayThreatMap)
+	{
+		if (!GridManager || ThreatMap.Num() == 0) return;
+		
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("Displaying Threat Map"));
+		}
+		
+		FVector HalfExtent = FVector(100 / 2.0f, 100 / 2.0f, 1.0f);
+		
+		float MinThreat = 0; 
+		float MaxThreat = 0;
+		
+		for (const auto& [Coord, TileActor] : GridManager->TileActors)
+		{
+			float ThreatValue = ThreatMap.FindRef(Coord);
+			MinThreat = FMath::Min(MinThreat, ThreatValue);
+			MaxThreat = FMath::Max(MaxThreat, ThreatValue);
+		}
+		
+		for (auto Tile : GridManager->TileActors)
+		{
+			float ThreatValue = ThreatMap.FindRef(Tile.Key);
+			float Alpha = (MaxThreat > MinThreat) ? FMath::GetRangePct(MinThreat, MaxThreat, ThreatValue) : 0.0f;		
+			
+			FVector TileLocation = Tile.Value->GetActorLocation() + FVector(0, 0, 10);
+			
+			DrawDebugSolidBox(
+				GetWorld(),
+				TileLocation,
+				HalfExtent,
+				FColor(FMath::Lerp(0.0f, 200.0f, Alpha), 0, FMath::Lerp(200.0f, 0.0f, Alpha), 220),
+				true,
+				2.0f,
+				1
+			);
+			
+			FString ThreatString = FString::Printf(TEXT("%.0f"), ThreatValue);
+
+			/*DrawDebugString(
+				GetWorld(),
+				TileLocation + FVector(50, 50, 5),
+				ThreatString,
+				nullptr, 
+				FColor::White, 
+				-1,
+				true,
+				1.2f 
+			);*/
+		}
+		
+		bDisplayThreatMap = true;
+	}
+	else
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("Hiding Threat Map"));
+		}
+		
+		FlushPersistentDebugLines(GetWorld());
+		bDisplayThreatMap = false;
+	}
 }
 
 void AChessGameMode::StartPlayerTurn_Implementation()

@@ -1,11 +1,13 @@
 ﻿#include "AI/ChessMovementLogic.h"
 
+#include "AI/ChessAIPlanner.h"
+
 void ChessMovementLogic::CalculateLegalMoves(
-    const IChessBoardInterface* Board,
+    const UVirtualBoard* Board,
     const FIntPoint& StartPos,
     const FMovementRule& Rule,
     EChessTeam MyTeam,
-    TArray<FVirtualMove>& OutMoves,
+    TArray<FChessDecision>& OutMoves,
     bool bIncludeEmptyAttacks)
 {
     if (!Board) return;
@@ -17,13 +19,13 @@ void ChessMovementLogic::CalculateLegalMoves(
         FIntPoint Forward(StartPos.X, StartPos.Y + Dir);
         FIntPoint Backward(StartPos.X, StartPos.Y - Dir);
 
-        if (Board->IsValidGridPos(Forward) && !Board->IsTileOccupied(Forward))
+        if (Board->IsValidGridPos(Forward, Board->Width, Board->Height) && !Board->IsTileOccupied(Forward) && !bIncludeEmptyAttacks)
         {
-            OutMoves.Add({ -1, StartPos, Forward, EVirtualMoveType::Move });
+            OutMoves.Add({ EChessDecisionType::Move, -BIG_NUMBER, Forward });
         }
-        if (Board->IsValidGridPos(Backward) && !Board->IsTileOccupied(Backward))
+        if (Board->IsValidGridPos(Backward, Board->Width, Board->Height) && !Board->IsTileOccupied(Backward) && !bIncludeEmptyAttacks)
         {
-            OutMoves.Add({ -1, StartPos, Backward, EVirtualMoveType::Move });
+            OutMoves.Add({EChessDecisionType::Move, -BIG_NUMBER, Backward});
         }
 
         FIntPoint Attacks[] = {
@@ -33,13 +35,13 @@ void ChessMovementLogic::CalculateLegalMoves(
         
         for (const FIntPoint& AttackPos : Attacks)
         {
-            if (Board->IsValidGridPos(AttackPos))
+            if (Board->IsValidGridPos(AttackPos, Board->Width, Board->Height))
             {
                 bool bHasEnemy = Board->IsTileOccupied(AttackPos) && Board->GetTeamAt(AttackPos) != MyTeam;
                 
                 if (bHasEnemy || bIncludeEmptyAttacks)
                 {
-                    OutMoves.Add({ -1, StartPos, AttackPos, EVirtualMoveType::Attack });
+                    OutMoves.Add({EChessDecisionType::Attack, -BIG_NUMBER, AttackPos});
                 }
             }
         }
@@ -63,17 +65,17 @@ void ChessMovementLogic::CalculateLegalMoves(
         {
             FIntPoint TargetPos = StartPos + (Dir * i);
             
-            if (!Board->IsValidGridPos(TargetPos)) break;
+            if (!Board->IsValidGridPos(TargetPos, Board->Width, Board->Height)) break;
 
             if (!Board->IsTileOccupied(TargetPos))
             {
-                OutMoves.Add({ -1, StartPos, TargetPos, EVirtualMoveType::Move });
+                OutMoves.Add({ EChessDecisionType::Move, -BIG_NUMBER, TargetPos });
             }
             else
             {
                 if (Board->GetTeamAt(TargetPos) != MyTeam)
                 {
-                    OutMoves.Add({ -1, StartPos, TargetPos, EVirtualMoveType::Attack });
+                    OutMoves.Add({ EChessDecisionType::Attack, -BIG_NUMBER, TargetPos });
                 }
                 break;
             }

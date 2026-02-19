@@ -4,12 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Enums.h"
+#include "AI/ChessAIPlanner.h"
 #include "AI/ChessMovementLogic.h"
 #include "GameFramework/Actor.h"
 #include "Tiles/ChessTileBase.h"
 #include "Units/ChessUnitBase.h"
 #include "ChessGridManager.generated.h"
 
+class AChessGameMode;
+class UVirtualBoard;
 class UTimelineComponent;
 class UCurveFloat;
 
@@ -26,7 +29,6 @@ struct FUnitSpawnInfo
 };
 
 
-
 UCLASS()
 class TRPG_EXAM_API AChessGridManager : public AActor, public IChessBoardInterface
 {
@@ -35,10 +37,8 @@ class TRPG_EXAM_API AChessGridManager : public AActor, public IChessBoardInterfa
 public:	
 	AChessGridManager();
 
-protected:
-	virtual void BeginPlay() override;
-
-public:	
+	virtual void Initialize();
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid Config")
 	float TileSize;
 
@@ -85,11 +85,14 @@ public:
 	bool IsValidGridPos(FIntPoint GridPos);
 	
 	UFUNCTION(BlueprintCallable, Category = "CombatLogic")
-	TMap<FIntPoint, ETileInteraction> GetValidMoves(AChessUnitBase* Unit, bool bIncludeEmptyAttacks = false);
+	TMap<FIntPoint, ETileInteraction> GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, UVirtualBoard* Board, bool bIncludeEmptyAttacks = false);
 
 	static bool IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase* TargetUnit);
 	
 // GAMEPLAY	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framewrok")
+	AChessGameMode* GameMode;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat Logic")
 	AChessUnitBase* SelectedUnit;
 	
@@ -173,7 +176,7 @@ public:
 	void PlayImpactFeedback(AChessUnitBase* Attacker, AChessUnitBase* Target, bool bIsFatal);
 
 // CHESSBOARD INTERFACES
-	virtual bool IsValidGridPos(const FIntPoint& Pos) const override;
+	virtual bool IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const override;
 	virtual bool IsTileOccupied(const FIntPoint& Pos) const override;
 	virtual EChessTeam GetTeamAt(const FIntPoint& Pos) const override;
 	

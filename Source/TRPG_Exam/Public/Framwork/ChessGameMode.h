@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Enums.h"
-#include "AI/ChessAITypes.h"
+#include "AI/ChessAIPlanner.h"
 #include "GameFramework/GameModeBase.h"
 #include "ChessGameMode.generated.h"
 
@@ -24,6 +24,12 @@ public:
 	
 	bool bPlayerKingExists = false;
 	bool bEnemyKingExists = false;
+	
+	bool bDisplayVirtualBoard = false;
+	bool bDisplayThreatMap = false;
+	
+	UVirtualBoard* VirtualBoard;
+	TMap<FIntPoint, float> ThreatMap;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	AChessGridManager* GridManager;
@@ -52,6 +58,18 @@ public:
 	UFUNCTION(BlueprintNativeEvent, Category = "Game Flow")
 	void OnGameOver(EChessTeam WinningTeam);
 	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "AI")
+	void GenerateVirtualBoard();
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "AI")
+	void GenerateThreatMap();
+	
 	UFUNCTION(BlueprintNativeEvent, Category = "AI")
-	void ComputeGlobalAI(FHTNTask& BestTask, AChessUnitBase*& OutBestUnit);
+	void ComputeGlobalAI(FChessDecision& BestTask, AChessUnitBase*& OutBestUnit);
+	
+	UFUNCTION(Exec)
+	void DisplayVirtualBoard();
+	
+	UFUNCTION(Exec)
+	void DisplayThreatMap();
 };

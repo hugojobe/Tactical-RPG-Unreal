@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+/*
 #include "CoreMinimal.h"
 #include "ChessAITypes.h"
 #include "Managers/ChessGridManager.h"
@@ -11,7 +12,7 @@ class UChessHTNPlanner : public UObject
 	GENERATED_BODY()
 	
 public:
-	FHTNTask MakePlan(const FVirtualBoard& InitialBoard);
+	//FHTNTask MakePlan(const FVirtualBoard& InitialBoard);
 	
 	AChessUnitBase* MyUnit;
 	AChessGridManager* GridManager;
@@ -52,3 +53,5 @@ public:
 	void SortMovesByHeuristic(TArray<FVirtualMove>& Moves, const FVirtualBoard& Board, int32 Depth);
 	float GetMoveScore(const FVirtualMove& Move, const FVirtualBoard& Board, int32 Depth) const;
 };
+
+*/

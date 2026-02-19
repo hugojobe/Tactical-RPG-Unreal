@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "AIController.h"
+#include "ChessAIPlanner.h"
 #include "UChessHTNPlanner.h"
 #include "ChessAIController.generated.h"
 
@@ -22,12 +23,12 @@ public:
 	AChessAIController();
 
 	UPROPERTY(VisibleAnywhere)
-	UChessHTNPlanner* HTNPlanner;
+	UChessAIPlanner* AIPlanner;
 	
-	FHTNTask CurrentPlan;
+	//FHTNTask CurrentPlan;
 
-	UFUNCTION(BlueprintCallable, Category = "AI")
-	FHTNTask GetPlan();
+	//UFUNCTION(BlueprintCallable, Category = "AI")
+	//FHTNTask GetPlan();
 	
 	AChessGridManager* GridManager;
 	AChessUnitBase* MyPawn;
@@ -38,7 +39,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Personality")
 	float SelfPreservation = 1.0f; // High means high ELO
 
-	void PerformTask(const FHTNTask& Task);
+	void PerformTask(const FChessDecision& Task);
 
 	virtual void OnPossess(APawn* InPawn) override;
 };

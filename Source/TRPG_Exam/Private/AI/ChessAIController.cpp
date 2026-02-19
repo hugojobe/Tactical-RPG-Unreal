@@ -2,13 +2,16 @@
 
 
 #include "AI/ChessAIController.h"
+
+#include "AI/ChessAIPlanner.h"
 #include "Kismet/GameplayStatics.h"
+#include "Managers/ChessGridManager.h"
 
 AChessAIController::AChessAIController()
 {
 	GridManager = Cast<AChessGridManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AChessGridManager::StaticClass()));
 	
-	HTNPlanner = CreateDefaultSubobject<UChessHTNPlanner>(TEXT("HTNPlanner"));
+	AIPlanner = CreateDefaultSubobject<UChessAIPlanner>(TEXT("AI Planner"));
 }
 
 void AChessAIController::OnPossess(APawn* InPawn)
@@ -16,40 +19,33 @@ void AChessAIController::OnPossess(APawn* InPawn)
  	Super::OnPossess(InPawn);
 	
 	MyPawn = Cast<AChessUnitBase>(GetPawn());
-	HTNPlanner->MyUnit = MyPawn;
-	HTNPlanner->GridManager = GridManager;
+	AIPlanner->MyUnit = MyPawn;
+	AIPlanner->GridManager = GridManager;
 	Aggressiveness = Cast<AChessUnitBase>(InPawn)->Aggressiveness;
 	SelfPreservation = Cast<AChessUnitBase>(InPawn)->SelfPreservation;
-	HTNPlanner->AggressionFactor = Aggressiveness;
-	HTNPlanner->SafetyFactor = SelfPreservation;
+	AIPlanner->AggressionFactor = Aggressiveness;
+	AIPlanner->SafetyFactor = SelfPreservation;
 }
 
-FHTNTask AChessAIController::GetPlan()
+/*FHTNTask AChessAIController::GetPlan()
 {
-	/*FHTNTask NullPlan;
-	NullPlan.TaskName = FName("None");
-	NullPlan.Score = -99999.0f;
-	NullPlan.Type = EHTNTaskType::Action;
-	
-	if (!GridManager || !MyPawn || !HTNPlanner) return NullPlan;
-	
-	CurrentPlan = HTNPlanner->MakePlan();
-
-	if(!CurrentPlan.IsValid()) return NullPlan;*/	
 	return CurrentPlan;
-}
+}*/
 
-void AChessAIController::PerformTask(const FHTNTask& Task)
+void AChessAIController::PerformTask(const FChessDecision& Task)
 {
-	UE_LOG(LogTemp, Warning, TEXT("[AI] %s performing task: %s"), *MyPawn->GetName(), *Task.TaskName.ToString());
-	
-	if (Task.TaskName == "Attack")
+	if (Task.Type == EChessDecisionType::Attack)
 	{
-		GridManager->AttackUnit(MyPawn, Task.TargetUnit);
+		GridManager->AttackUnit(MyPawn, GridManager->GetUnitAt(Task.TargetPosition));
 	}
-	else if (Task.TaskName == "Move")
+	else if (Task.Type == EChessDecisionType::Move)
 	{
-		GridManager->MoveUnit(MyPawn, Task.TargetTile);
+		GridManager->MoveUnit(MyPawn, Task.TargetPosition);
+	} else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Unknown decision"));
+		if (GEngine)
+			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, TEXT("Unknown decision"));
 	}
 }
 

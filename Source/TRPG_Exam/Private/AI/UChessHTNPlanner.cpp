@@ -1,6 +1,6 @@
 ﻿#include "AI/UChessHTNPlanner.h"
 
-#include "Kismet/GameplayStatics.h"
+/*#include "Kismet/GameplayStatics.h"
 
 class VirtualBoardWrapper : public IChessBoardInterface
 {
@@ -165,6 +165,7 @@ FHTNTask UChessHTNPlanner::MakePlan(const FVirtualBoard& InitialBoard)
     
 	return FinalTask;
 }
+
 
 float UChessHTNPlanner::Minimax(FVirtualBoard& Board, int32 Depth, float Alpha, float Beta, bool bMaximizingPlayer)
 {
@@ -553,4 +554,4 @@ float UChessHTNPlanner::GetMoveScore(const FVirtualMove& Move, const FVirtualBoa
 	return Score;
 }
 
-
+*/

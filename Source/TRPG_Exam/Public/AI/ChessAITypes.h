@@ -40,7 +40,7 @@ struct FInfluenceMap
 	}
 };
 
-UENUM()
+/*UENUM()
 enum class EHTNTaskType : uint8
 {
 	Action,
@@ -114,4 +114,4 @@ struct FVirtualBoard
 		if (const int32* Idx = Grid.Find(P)) return *Idx;
 		return -1;
 	}
-};
+};*/

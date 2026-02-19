@@ -2,8 +2,8 @@
 
 
 #include "Managers/ChessGridManager.h"
-
 #include "ToolBuilderUtil.h"
+#include "AI/ChessAIPlanner.h"
 #include "Components/TimelineComponent.h"
 #include "Framwork/ChessGameMode.h"
 #include "Kismet/GameplayStatics.h"
@@ -20,7 +20,7 @@ AChessGridManager::AChessGridManager()
 	BoardHeight = 6;
 }
 
-void AChessGridManager::BeginPlay()
+void AChessGridManager::Initialize()
 {
 	Super::BeginPlay();
 	RegisterStartingUnits();
@@ -84,13 +84,10 @@ void AChessGridManager::RegisterUnitAt(FIntPoint GridPos, AChessUnitBase* Unit)
 	
 	if (Unit->UnitType == EChessUnitType::King)
 	{
-		if (AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode()))
-		{
-			if (Unit->Team == EChessTeam::Player)
-				GameMode->bPlayerKingExists = true;
-			else if (Unit->Team == EChessTeam::Enemy)
-				GameMode->bEnemyKingExists = true;
-		}
+		if (Unit->Team == EChessTeam::Player)
+			GameMode->bPlayerKingExists = true;
+		else if (Unit->Team == EChessTeam::Enemy)
+			GameMode->bEnemyKingExists = true;
 	}
 }
 
@@ -113,14 +110,13 @@ AChessUnitBase* AChessGridManager::GetUnitAt(FIntPoint GridPos)
 
 bool AChessGridManager::IsValidGridPos(FIntPoint GridPos)
 {
-	return (GridPos.X >= 0 && GridPos.X < BoardWidth &&
-			GridPos.Y >= 0 && GridPos.Y < BoardHeight);
+	return IsValidGridPos(GridPos, BoardWidth, BoardHeight);
 }
 
-bool AChessGridManager::IsValidGridPos(const FIntPoint& Pos) const
+bool AChessGridManager::IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const
 {
-	return (Pos.X >= 0 && Pos.X < BoardWidth &&
-			Pos.Y >= 0 && Pos.Y < BoardHeight);
+	return (Pos.X >= 0 && Pos.X < Width &&
+			Pos.Y >= 0 && Pos.Y < Height);
 }
 
 void AChessGridManager::ClearBoardVisuals()
@@ -181,25 +177,26 @@ bool AChessGridManager::IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase
 	return Unit->Team != TargetUnit->Team;
 }
 
-TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(AChessUnitBase* Unit, bool bIncludeEmptyAttacks)
+TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, UVirtualBoard* Board, bool bIncludeEmptyAttacks)
 {
-	TMap<FIntPoint, ETileInteraction> Result;
-	if (!Unit) return Result;
+	if (Board == nullptr) return {};
 	
-	TArray<FVirtualMove> RawMoves = {};
+	TMap<FIntPoint, ETileInteraction> Result;
+	
+	TArray<FChessDecision> RawMoves = {};
 	ChessMovementLogic::CalculateLegalMoves(
-		this,
-		FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y),
-		Unit->MovementRule,
-		Unit->Team,
+		Board,
+		FIntPoint(UnitPos.X, UnitPos.Y),
+		Unit.UnitMovementRule,
+		Unit.Team,
 		RawMoves,
 		bIncludeEmptyAttacks
 	);
 	
-	for (const FVirtualMove& VirtualMove : RawMoves)
+	for (const FChessDecision& Decision : RawMoves)
 	{
-		ETileInteraction Interaction = (VirtualMove.Type == EVirtualMoveType::Attack) ? ETileInteraction::Attack : ETileInteraction::Move;
-		Result.Add(VirtualMove.To, Interaction);
+		ETileInteraction Interaction = (Decision.Type == EChessDecisionType::Attack) ? ETileInteraction::Attack : ETileInteraction::Move;
+		Result.Add(Decision.TargetPosition, Interaction);
 	}
     
 	return Result;
@@ -283,7 +280,13 @@ void AChessGridManager::HighlightTilesForUnit_Implementation(AChessUnitBase* Uni
 		if (SelectedUnit != Unit)
 		{
 			SelectedUnit = Unit;
-			HighlightedTiles = GetValidMoves(Unit);
+			
+			FVirtualUnit VUnit;
+			VUnit.Team = Unit->Team;
+			VUnit.UnitMovementRule = Unit->MovementRule;
+			VUnit.UnitStats = Unit->Stats;
+			
+			HighlightedTiles = GetValidMoves(VUnit, FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), GameMode->VirtualBoard, false);
 			
 			if (!HighlightedTiles.IsEmpty())
 			{
@@ -311,8 +314,6 @@ void AChessGridManager::HighlightTilesForUnit_Implementation(AChessUnitBase* Uni
 
 void AChessGridManager::MoveUnit_Implementation(AChessUnitBase* Unit, FIntPoint Position)
 {
-	const AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode());
-	if (!GameMode) return;
 	if(!Unit || !UnitMovementSpeedCurve || CurrentTurnActionState != GameMode->CurrentTurn) return;
 
 	CurrentTurnActionState = ETurnState::None;
@@ -376,9 +377,6 @@ void AChessGridManager::HandleMoveFinished_Implementation()
 
 void AChessGridManager::AttackUnit_Implementation(AChessUnitBase* Attacker, AChessUnitBase* TargetUnit)
 {
-	const AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode());
-	if (!GameMode) return;
-	
 	if(!Attacker || !TargetUnit || !AttackRushCurve || !AttackBounceBackCurve || CurrentTurnActionState != GameMode->CurrentTurn) return;
 
 	CurrentTurnActionState = ETurnState::None;
@@ -531,11 +529,8 @@ void AChessGridManager::PlayImpactFeedback_Implementation(AChessUnitBase* Attack
 
 void AChessGridManager::PlayerActionFinished_Implementation()
 {
-	if (AChessGameMode* GameMode = Cast<AChessGameMode>(GetWorld()->GetAuthGameMode()))
-	{
-		GameMode->CheckWinCondition();
-		GameMode->PlayerActionFinished(this);
-	}
+	GameMode->CheckWinCondition();
+	GameMode->PlayerActionFinished(this);
 }
 
 bool AChessGridManager::IsTileOccupied(const FIntPoint& Pos) const
