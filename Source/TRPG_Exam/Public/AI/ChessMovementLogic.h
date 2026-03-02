@@ -4,7 +4,7 @@
 #include "CoreMinimal.h"
 #include "Enums.h"
 
-class UVirtualBoard;
+struct FVirtualBoard;
 struct FChessDecision;
 
 class IChessBoardInterface
@@ -19,7 +19,7 @@ class TRPG_EXAM_API ChessMovementLogic
 {
 	public:
 		static void CalculateLegalMoves(
-			const UVirtualBoard* Board,
+			FVirtualBoard Board,
 			const FIntPoint& StartPos,
 			const FMovementRule& Rule,
 			EChessTeam MyTeam,

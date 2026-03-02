@@ -27,9 +27,13 @@ public:
 	
 	bool bDisplayVirtualBoard = false;
 	bool bDisplayThreatMap = false;
+	bool bDisplayDefenseMap = false;
+	bool bDisplayBalanceMap = false;
 	
-	UVirtualBoard* VirtualBoard;
+	FVirtualBoard VirtualBoard;
 	TMap<FIntPoint, float> ThreatMap;
+	TMap<FIntPoint, float> DefenseMap;
+	TMap<FIntPoint, float> BalanceMap;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	AChessGridManager* GridManager;
@@ -64,12 +68,24 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "AI")
 	void GenerateThreatMap();
 	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "AI")
+	void GenerateDefenseMap();
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "AI")
+	void GenerateBalanceMap();
+	
 	UFUNCTION(BlueprintNativeEvent, Category = "AI")
-	void ComputeGlobalAI(FChessDecision& BestTask, AChessUnitBase*& OutBestUnit);
+	void ComputeGlobalAI(FChessDecision& BestTask, AChessUnitBase*& OutBestUnit, const TArray<AChessUnitBase*>& EnemyUnitsThinking);
 	
 	UFUNCTION(Exec)
 	void DisplayVirtualBoard();
 	
 	UFUNCTION(Exec)
 	void DisplayThreatMap();
+	
+	UFUNCTION(Exec)
+	void DisplayDefenseMap();
+	
+	UFUNCTION(Exec)
+	void DisplayBalanceMap();
 };

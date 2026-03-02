@@ -3,15 +3,13 @@
 #include "AI/ChessAIPlanner.h"
 
 void ChessMovementLogic::CalculateLegalMoves(
-    const UVirtualBoard* Board,
+    FVirtualBoard Board,
     const FIntPoint& StartPos,
     const FMovementRule& Rule,
     EChessTeam MyTeam,
     TArray<FChessDecision>& OutMoves,
     bool bIncludeEmptyAttacks)
 {
-    if (!Board) return;
-
     if (Rule.MovementStyle == EMovementStyle::Pawn)
     {
         int32 Dir = (MyTeam == EChessTeam::Player) ? 1 : -1;
@@ -19,11 +17,11 @@ void ChessMovementLogic::CalculateLegalMoves(
         FIntPoint Forward(StartPos.X, StartPos.Y + Dir);
         FIntPoint Backward(StartPos.X, StartPos.Y - Dir);
 
-        if (Board->IsValidGridPos(Forward, Board->Width, Board->Height) && !Board->IsTileOccupied(Forward) && !bIncludeEmptyAttacks)
+        if (Board.IsValidGridPos(Forward, Board.Width, Board.Height) && !Board.IsTileOccupied(Forward) && !bIncludeEmptyAttacks)
         {
             OutMoves.Add({ EChessDecisionType::Move, -BIG_NUMBER, Forward });
         }
-        if (Board->IsValidGridPos(Backward, Board->Width, Board->Height) && !Board->IsTileOccupied(Backward) && !bIncludeEmptyAttacks)
+        if (Board.IsValidGridPos(Backward, Board.Width, Board.Height) && !Board.IsTileOccupied(Backward) && !bIncludeEmptyAttacks)
         {
             OutMoves.Add({EChessDecisionType::Move, -BIG_NUMBER, Backward});
         }
@@ -35,9 +33,9 @@ void ChessMovementLogic::CalculateLegalMoves(
         
         for (const FIntPoint& AttackPos : Attacks)
         {
-            if (Board->IsValidGridPos(AttackPos, Board->Width, Board->Height))
+            if (Board.IsValidGridPos(AttackPos, Board.Width, Board.Height))
             {
-                bool bHasEnemy = Board->IsTileOccupied(AttackPos) && Board->GetTeamAt(AttackPos) != MyTeam;
+                bool bHasEnemy = Board.IsTileOccupied(AttackPos) && Board.GetTeamAt(AttackPos) != MyTeam;
                 
                 if (bHasEnemy || bIncludeEmptyAttacks)
                 {
@@ -60,22 +58,32 @@ void ChessMovementLogic::CalculateLegalMoves(
         SafeRange = FMath::Min(SafeRange, MaxBoardSize);
 
         int32 Loops = (Rule.MovementStyle == EMovementStyle::Slide) ? SafeRange + 1 : 2;
+        
+        bool HasEncounteredAlly = false;
 
         for (int32 i = 1; i < Loops; i++)
         {
             FIntPoint TargetPos = StartPos + (Dir * i);
             
-            if (!Board->IsValidGridPos(TargetPos, Board->Width, Board->Height)) break;
+            if (!Board.IsValidGridPos(TargetPos, Board.Width, Board.Height)) break;
 
-            if (!Board->IsTileOccupied(TargetPos))
+            if (!Board.IsTileOccupied(TargetPos))
             {
                 OutMoves.Add({ EChessDecisionType::Move, -BIG_NUMBER, TargetPos });
             }
             else
             {
-                if (Board->GetTeamAt(TargetPos) != MyTeam)
+                if (Board.GetTeamAt(TargetPos) != MyTeam)
                 {
                     OutMoves.Add({ EChessDecisionType::Attack, -BIG_NUMBER, TargetPos });
+                }
+                else
+                {
+                    if (!HasEncounteredAlly && bIncludeEmptyAttacks)
+                    {
+                        OutMoves.Add({ EChessDecisionType::Attack, -BIG_NUMBER, TargetPos });
+                        HasEncounteredAlly = true;
+                    }
                 }
                 break;
             }

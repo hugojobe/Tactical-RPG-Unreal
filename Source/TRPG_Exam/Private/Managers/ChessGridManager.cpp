@@ -37,6 +37,25 @@ void AChessGridManager::Initialize()
 	}
 }
 
+void AChessGridManager::InitializeZobrist()
+{
+	for (int sq = 0; sq < 64; ++sq) {
+		for (int team = 0; team < 3; ++team) {
+			for (int type = 0; type < 7; ++type) {
+				uint64 High = (uint64)(FMath::RandRange(0, 0x7FFFFFFF));
+				uint64 Low = (uint64)(FMath::RandRange(0, 0x7FFFFFFF));
+				ZobristTable[sq][team][type] = (High << 32) | Low;
+			}
+		}
+	}
+
+	TranspositionTable.SetNum(TT_SIZE); 
+	for (int i = 0; i < TT_SIZE; ++i) {
+		TranspositionTable[i].Key = 0;
+		TranspositionTable[i].Depth = -1;
+	}
+}
+
 void AChessGridManager::RegisterStartingUnits()
 {
 	TArray<AActor*> StartingUnits;
@@ -177,10 +196,8 @@ bool AChessGridManager::IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase
 	return Unit->Team != TargetUnit->Team;
 }
 
-TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, UVirtualBoard* Board, bool bIncludeEmptyAttacks)
+TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, FVirtualBoard Board, bool bIncludeEmptyAttacks)
 {
-	if (Board == nullptr) return {};
-	
 	TMap<FIntPoint, ETileInteraction> Result;
 	
 	TArray<FChessDecision> RawMoves = {};
@@ -285,6 +302,7 @@ void AChessGridManager::HighlightTilesForUnit_Implementation(AChessUnitBase* Uni
 			VUnit.Team = Unit->Team;
 			VUnit.UnitMovementRule = Unit->MovementRule;
 			VUnit.UnitStats = Unit->Stats;
+			VUnit.UnitType = Unit->UnitType;
 			
 			HighlightedTiles = GetValidMoves(VUnit, FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), GameMode->VirtualBoard, false);
 			
@@ -321,6 +339,8 @@ void AChessGridManager::MoveUnit_Implementation(AChessUnitBase* Unit, FIntPoint 
 	MovingUnit = Unit;
 	MoveStartLoc = Unit->GetActorLocation();
 	MoveTargetLoc = GridToWorld(Position);
+	
+	MovingUnit->LastPosition = FIntPoint(MovingUnit->GridCoordinates.X, MovingUnit->GridCoordinates.Y);
 
 	FOnTimelineFloat ProgressFunction;
 	ProgressFunction.BindUFunction(this, FName("HandleMoveProgress"));
@@ -356,6 +376,7 @@ void AChessGridManager::HandleMoveFinished_Implementation()
 	if (MovingUnit)
 	{
 		MovingUnit->SetActorLocation(MoveTargetLoc);
+		
 
 		FRotator FinalRot = MovingUnit->GetActorRotation();
         FinalRot.Pitch = 0.0f;

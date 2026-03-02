@@ -104,6 +104,8 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Grid")
 	FVector2D GridCoordinates;
 	
+	FIntPoint LastPosition;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
 	EChessUnitType UnitType;
 	

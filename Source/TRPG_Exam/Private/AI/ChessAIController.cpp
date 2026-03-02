@@ -23,14 +23,7 @@ void AChessAIController::OnPossess(APawn* InPawn)
 	AIPlanner->GridManager = GridManager;
 	Aggressiveness = Cast<AChessUnitBase>(InPawn)->Aggressiveness;
 	SelfPreservation = Cast<AChessUnitBase>(InPawn)->SelfPreservation;
-	AIPlanner->AggressionFactor = Aggressiveness;
-	AIPlanner->SafetyFactor = SelfPreservation;
 }
-
-/*FHTNTask AChessAIController::GetPlan()
-{
-	return CurrentPlan;
-}*/
 
 void AChessAIController::PerformTask(const FChessDecision& Task)
 {

@@ -12,9 +12,9 @@
 #include "ChessGridManager.generated.h"
 
 class AChessGameMode;
-class UVirtualBoard;
 class UTimelineComponent;
 class UCurveFloat;
+struct FVirtualBoard;
 
 USTRUCT(BlueprintType)
 struct FUnitSpawnInfo
@@ -38,6 +38,7 @@ public:
 	AChessGridManager();
 
 	virtual void Initialize();
+	void InitializeZobrist();
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid Config")
 	float TileSize;
@@ -85,11 +86,14 @@ public:
 	bool IsValidGridPos(FIntPoint GridPos);
 	
 	UFUNCTION(BlueprintCallable, Category = "CombatLogic")
-	TMap<FIntPoint, ETileInteraction> GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, UVirtualBoard* Board, bool bIncludeEmptyAttacks = false);
+	static TMap<FIntPoint, ETileInteraction> GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, FVirtualBoard Board, bool bIncludeEmptyAttacks = false);
 
 	static bool IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase* TargetUnit);
 	
-// GAMEPLAY	
+// GAMEPLAY
+	TArray<FTTEntry> TranspositionTable;
+	uint64 ZobristTable[64][3][7];
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framewrok")
 	AChessGameMode* GameMode;
 	
