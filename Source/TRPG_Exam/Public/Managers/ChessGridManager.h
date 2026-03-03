@@ -178,13 +178,15 @@ public:
 
 	UFUNCTION(BlueprintNativeEvent, Category = "Combat Feedback")
 	void PlayImpactFeedback(AChessUnitBase* Attacker, AChessUnitBase* Target, bool bIsFatal);
+	
+	bool CanTeamMove(EChessTeam Team, FVirtualBoard& Board);
 
 // CHESSBOARD INTERFACES
 	virtual bool IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const override;
 	virtual bool IsTileOccupied(const FIntPoint& Pos) const override;
 	virtual EChessTeam GetTeamAt(const FIntPoint& Pos) const override;
-	
-// Editor Tools
+
+	// Editor Tools
 	UFUNCTION(CallInEditor, Category = "Grid Visuals")
 	void GenerateGrid();
 	

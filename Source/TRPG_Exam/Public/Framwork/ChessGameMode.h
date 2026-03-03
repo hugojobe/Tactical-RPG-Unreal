@@ -49,6 +49,9 @@ public:
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
 	void EndEnemyTurn();
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
+	void SetCurrentTurn(ETurnState NewTurnState);
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
 	void StartEnemyTurn();
@@ -57,7 +60,7 @@ public:
 	void StartPlayerTurn();
 	
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
-	void CheckWinCondition();
+	bool CheckWinCondition(bool TriggerGameOver = true);
 
 	UFUNCTION(BlueprintNativeEvent, Category = "Game Flow")
 	void OnGameOver(EChessTeam WinningTeam);

@@ -101,6 +101,8 @@ void AChessGameMode::PlayerActionFinished_Implementation(AChessGridManager* Mana
 {
 	Manager->CurrentTurnActionState = CurrentTurn;
 
+	CheckWinCondition();
+	
 	if(CurrentTurn == ETurnState::Player)
 		EndPlayerTurn();
 	else
@@ -111,7 +113,7 @@ void AChessGameMode::EndPlayerTurn_Implementation()
 {
 	if (CurrentTurn == ETurnState::None) return;
 	
-	CurrentTurn = ETurnState::Enemy;
+	SetCurrentTurn(ETurnState::Enemy);
 	GridManager->CurrentTurnActionState = ETurnState::None;
 	
 	GenerateVirtualBoard();
@@ -126,7 +128,7 @@ void AChessGameMode::EndEnemyTurn_Implementation()
 {
 	if (CurrentTurn == ETurnState::None) return;
 	
-	CurrentTurn = ETurnState::Player;
+	SetCurrentTurn(ETurnState::Player);
 	GridManager->CurrentTurnActionState = ETurnState::None;
 	
 	GenerateVirtualBoard();
@@ -137,7 +139,7 @@ void AChessGameMode::EndEnemyTurn_Implementation()
 
 void AChessGameMode::StartEnemyTurn_Implementation()
 {   
-	CurrentTurn = ETurnState::Enemy;
+	SetCurrentTurn(ETurnState::Enemy);
 	GridManager->CurrentTurnActionState = ETurnState::Enemy;
     
 	FTimerHandle TimerHandle;
@@ -213,31 +215,43 @@ void AChessGameMode::ComputeGlobalAI_Implementation(FChessDecision& BestTask, AC
 			MaxAchievedDepth = FMath::Max(MaxAchievedDepth, UnitDepth);
 			TotalDepthSum += UnitDepth;
     		
-    		if (UnitDecision.Score > BestDecision.Score)
+    		if (UnitDecision.Type != EChessDecisionType::Null)
     		{
-    			BestDecision = UnitDecision;
-    			BestUnit = Unit;
+    			if (UnitDecision.Score > BestDecision.Score)
+    			{
+    				BestDecision = UnitDecision;
+    				BestUnit = Unit;
+    			} else if (BestUnit == nullptr){
+    				BestDecision = UnitDecision;
+    				BestUnit = Unit;
+    			}
     		}
     	}
     });
+    
+    if (BestUnit == nullptr)
+    {
+    	GEngine->AddOnScreenDebugMessage(-1, 7.0f, FColor::Cyan, TEXT("No best unit found"));
+    	return;
+    }
+
+    BestTask = BestDecision;
+    OutBestUnit = BestUnit;
 	
 	if (GEngine)
 	{
 		float AverageDepth = EnemyUnitsThinking.Num() > 0 ? static_cast<float>(TotalDepthSum) / EnemyUnitsThinking.Num() : 0.0f;
 
-		FString StatsMessage = FString::Printf(TEXT("IA Terminé | Noeuds: %d | Profondeur Max: %d | Moyenne: %.1f"), 
-			TotalPositions, MaxAchievedDepth, AverageDepth);
+		FString StatsMessage = FString::Printf(TEXT("IA Terminé | Noeuds: %d | Profondeur Max: %d | Moyenne: %.1f | Best Task: %d"), 
+			TotalPositions, MaxAchievedDepth, AverageDepth, BestDecision.Type);
 			
 		GEngine->AddOnScreenDebugMessage(-1, 7.0f, FColor::Cyan, StatsMessage);
 	}
-    
-    if (BestUnit == nullptr)
-    {
-       return;
-    }
+}
 
-    BestTask = BestDecision;
-    OutBestUnit = BestUnit;
+void AChessGameMode::SetCurrentTurn_Implementation(ETurnState NewTurnState)
+{
+	CurrentTurn = NewTurnState;
 }
 
 void AChessGameMode::DisplayVirtualBoard()
@@ -449,11 +463,11 @@ void AChessGameMode::StartPlayerTurn_Implementation()
 {
 	if (CurrentTurn == ETurnState::None) return;
 	
-	CurrentTurn = ETurnState::Player;
+	SetCurrentTurn(ETurnState::Player);
 	GridManager->CurrentTurnActionState = ETurnState::Player;
 }
 
-void AChessGameMode::CheckWinCondition_Implementation()
+bool AChessGameMode::CheckWinCondition_Implementation(bool TriggerGameOver)
 {
 	TArray<AActor*> Units;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), Units);
@@ -480,30 +494,56 @@ void AChessGameMode::CheckWinCondition_Implementation()
 		}
 	}
 	
+	EChessTeam TeamToCheck = CurrentTurn == ETurnState::Player ? EChessTeam::Player : EChessTeam::Enemy;
+	if (!GridManager->CanTeamMove(TeamToCheck, VirtualBoard))
+	{
+		EChessTeam WinningTeam = (TeamToCheck == EChessTeam::Player) ? EChessTeam::Enemy : EChessTeam::Player;
+        
+		if (TriggerGameOver)
+		{
+			OnGameOver(WinningTeam);
+		}
+		return true;
+	}
+	
 	if (!bEnemyKingAlive && bEnemyKingExists)
 	{
-		CurrentTurn = ETurnState::None;
-		OnGameOver(EChessTeam::Player);
-		return;
+		if (TriggerGameOver)
+		{
+			OnGameOver(EChessTeam::Player);
+		}
+		return true;
 	}
 	if (!bPlayerKingAlive && bPlayerKingExists)
 	{
-		CurrentTurn = ETurnState::None;
-		OnGameOver(EChessTeam::Enemy);
-		return;
+		if (TriggerGameOver)
+		{
+			OnGameOver(EChessTeam::Player);
+		}
+		return true;
 	}
 
 	if (EnemyCount == 0)
 	{
-		CurrentTurn = ETurnState::None;
-		OnGameOver(EChessTeam::Player);
-		return;
+		if (TriggerGameOver)
+		{
+			OnGameOver(EChessTeam::Player);
+		}
+		return true;
 	}
 	if (PlayerCount == 0)
 	{
-		CurrentTurn = ETurnState::None;
-		OnGameOver(EChessTeam::Enemy);
+		if (TriggerGameOver)
+		{
+			OnGameOver(EChessTeam::Player);
+		}
+		return true;
 	}
+	
+	return false;
 }
 
-void AChessGameMode::OnGameOver_Implementation(EChessTeam WinningTeam) {}
+void AChessGameMode::OnGameOver_Implementation(EChessTeam WinningTeam)
+{
+	SetCurrentTurn(ETurnState::None);
+}

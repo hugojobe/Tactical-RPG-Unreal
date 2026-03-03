@@ -364,6 +364,7 @@ void AChessGridManager::HandleMoveProgress(float Value)
 
 		FVector MoveDirection = (MoveTargetLoc - MoveStartLoc).GetSafeNormal();
 		FRotator TargetRotation = MoveDirection.Rotation();
+		TargetRotation.Yaw -= MovingUnit->GetActorRotation().Yaw;
 
 		float LeanFactor = FMath::Sin(Value * PI);
 		TargetRotation.Pitch = UnitMovementTiltAngle * LeanFactor;
@@ -507,6 +508,9 @@ void AChessGridManager::HandleAttackFinished_Implementation()
 			{
 				CurrentAttackPhase = EAttackPhase::Capture;
 				
+				bool WinningHit = GameMode->CheckWinCondition(false);
+				GEngine->AddOnScreenDebugMessage(-1,10.0f, FColor::Yellow, FString::Printf(TEXT("Winning hit: %d"), WinningHit));
+				
 				AttackTimeline->SetPlayRate(1.0f);
 				AttackTimeline->PlayFromStart();
 			}
@@ -550,7 +554,6 @@ void AChessGridManager::PlayImpactFeedback_Implementation(AChessUnitBase* Attack
 
 void AChessGridManager::PlayerActionFinished_Implementation()
 {
-	GameMode->CheckWinCondition();
 	GameMode->PlayerActionFinished(this);
 }
 
@@ -566,4 +569,28 @@ EChessTeam AChessGridManager::GetTeamAt(const FIntPoint& Pos) const
 		if (FoundUnit) return (FoundUnit)->Team;
 	}
 	return EChessTeam::None;
+}
+
+bool AChessGridManager::CanTeamMove(EChessTeam Team, FVirtualBoard& Board)
+{
+	for (auto& Elem : GridMap)
+	{
+		AChessUnitBase* Unit = Elem.Value;
+		if (Unit && Unit->Team == Team)
+		{
+			FVirtualUnit VUnit;
+			VUnit.Team = Unit->Team;
+			VUnit.UnitMovementRule = Unit->MovementRule;
+			VUnit.UnitStats = Unit->Stats;
+			VUnit.UnitType = Unit->UnitType;
+            
+			TMap<FIntPoint, ETileInteraction> ValidMoves = GetValidMoves(VUnit, Elem.Key, Board, false);
+            
+			if (ValidMoves.Num() > 0)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }

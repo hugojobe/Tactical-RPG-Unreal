@@ -4,6 +4,7 @@
 #include "AI/ChessAIController.h"
 
 #include "AI/ChessAIPlanner.h"
+#include "Framwork/ChessGameMode.h"
 #include "Kismet/GameplayStatics.h"
 #include "Managers/ChessGridManager.h"
 
@@ -27,10 +28,22 @@ void AChessAIController::OnPossess(APawn* InPawn)
 
 void AChessAIController::PerformTask(const FChessDecision& Task)
 {
+	if (Task.Type == EChessDecisionType::Null)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 7.0f, FColor::Red, TEXT("No decision available, skipping turn"));
+		GridManager->GameMode->EndEnemyTurn();
+		return;
+	}
+	
 	if (Task.Type == EChessDecisionType::Attack)
 	{
-		GridManager->AttackUnit(MyPawn, GridManager->GetUnitAt(Task.TargetPosition));
-	}
+		AChessUnitBase* Target = GridManager->GetUnitAt(Task.TargetPosition);
+		if (!Target)
+		{
+			GridManager->MoveUnit(MyPawn, Task.TargetPosition);
+			return;
+		}
+		GridManager->AttackUnit(MyPawn, Target);	}
 	else if (Task.Type == EChessDecisionType::Move)
 	{
 		GridManager->MoveUnit(MyPawn, Task.TargetPosition);

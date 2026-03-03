@@ -204,6 +204,28 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 	bAbortSearch = false;
 	LastCompletedDepth = 0;
 	
+	FChessDecision FallbackDecision;
+	FallbackDecision.Type = EChessDecisionType::Null;
+	for (TTuple<FIntPoint, ETileInteraction> FirstMove : PossibleFirstMove)
+	{
+		if (FallbackDecision.Type == EChessDecisionType::Null)
+		{
+			FallbackDecision.Type = (FirstMove.Value == ETileInteraction::Move)
+				? EChessDecisionType::Move : EChessDecisionType::Attack;
+			FallbackDecision.TargetPosition = FirstMove.Key;
+			FallbackDecision.Score = -BIG_NUMBER;
+		}
+    
+		if (FirstMove.Key != MyUnit->LastPosition)
+		{
+			FallbackDecision.Type = (FirstMove.Value == ETileInteraction::Move)
+				? EChessDecisionType::Move : EChessDecisionType::Attack;
+			FallbackDecision.TargetPosition = FirstMove.Key;
+			FallbackDecision.Score = -BIG_NUMBER;
+			break;
+		}
+	}
+	
 	for (int CurrentDepth = 1; CurrentDepth <= ThinkDepth; CurrentDepth++)
 	{
 		FChessDecision DepthDecision;
@@ -214,14 +236,13 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 		float Beta = BIG_NUMBER;
 
 		for (TTuple<FIntPoint, ETileInteraction> FirstMove : PossibleFirstMove)
-		{
-			if (FirstMove.Key == MyUnit->LastPosition) continue;
-			
+		{			
 			FVirtualBoard SimBoard = Board;
 			switch (FirstMove.Value)
 			{
 			default: break;
 			case ETileInteraction::Move:
+				if (FirstMove.Key == MyUnit->LastPosition) continue;
 				SimBoard.MoveUnit(UnitOriginalPos, FirstMove.Key, VUnit);
 				break;
 			case ETileInteraction::Attack:
@@ -248,6 +269,12 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 		LastCompletedDepth = CurrentDepth;
 		BestOverallDecision = DepthDecision;
 		if (BestOverallDecision.Score > 500000.0f) break;
+	}
+	
+	if (BestOverallDecision.Type == EChessDecisionType::Null)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 7.0f, FColor::Cyan, FString::Printf(TEXT("Using fallback decision for %s"), *MyUnit->GetName()));
+		return FallbackDecision;
 	}
 	
 	return BestOverallDecision;
@@ -325,6 +352,11 @@ float UChessAIPlanner::Minimax(TArray<FIntPoint> Tiles, const FVirtualBoard& Boa
 	AllMoves.Sort([](const FAvailableMove& A, const FAvailableMove& B) {
 		return A.Priority > B.Priority;
 	});
+	
+	if (AllMoves.Num() == 0)
+	{
+		return bIsMaximizing ? -999999.0f : 999999.0f;
+	}
 	
 	float BestScore = bIsMaximizing ? -BIG_NUMBER : BIG_NUMBER;
 	FIntPoint CurrentBestMoveTarget = FIntPoint(-1, -1);
