@@ -518,7 +518,7 @@ bool AChessGameMode::CheckWinCondition_Implementation(bool TriggerGameOver)
 	{
 		if (TriggerGameOver)
 		{
-			OnGameOver(EChessTeam::Player);
+			OnGameOver(EChessTeam::Enemy);
 		}
 		return true;
 	}
@@ -535,7 +535,7 @@ bool AChessGameMode::CheckWinCondition_Implementation(bool TriggerGameOver)
 	{
 		if (TriggerGameOver)
 		{
-			OnGameOver(EChessTeam::Player);
+			OnGameOver(EChessTeam::Enemy);
 		}
 		return true;
 	}

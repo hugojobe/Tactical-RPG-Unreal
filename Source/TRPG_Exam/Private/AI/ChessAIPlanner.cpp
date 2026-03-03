@@ -200,7 +200,7 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 	TMap<FIntPoint, ETileInteraction> PossibleFirstMove = GridManager->GetValidMoves(VUnit, UnitOriginalPos, GridManager->GameMode->VirtualBoard);
 	
 	SearchStartTime = FPlatformTime::Seconds();
-	MaxSearchTime = 1.5;
+	MaxSearchTime = 2;
 	bAbortSearch = false;
 	LastCompletedDepth = 0;
 	
@@ -273,7 +273,6 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 	
 	if (BestOverallDecision.Type == EChessDecisionType::Null)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 7.0f, FColor::Cyan, FString::Printf(TEXT("Using fallback decision for %s"), *MyUnit->GetName()));
 		return FallbackDecision;
 	}
 	

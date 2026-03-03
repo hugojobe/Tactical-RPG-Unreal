@@ -265,6 +265,7 @@ void AChessGridManager::OnUnitClicked_Implementation(AChessUnitBase* Unit)
 		{
 			if (Unit == SelectedUnit) return;
 			DeselectUnit();
+			OnUnitHoverUpdated(Unit);
 			HighlightTilesForUnit(Unit);
 			Unit->OnUnitClickedFeedback();
 			IsUnitClicked = true;
@@ -283,6 +284,7 @@ void AChessGridManager::DeselectUnit_Implementation()
 	if(SelectedUnit != nullptr){
  		SelectedUnit->OnUnitUnclickedFeedback();
  		SelectedUnit = nullptr;
+		OnUnitHoverUpdated(nullptr);
  	}
 	HighlightTilesForUnit(nullptr);
 	IsUnitClicked = false;
@@ -507,9 +509,8 @@ void AChessGridManager::HandleAttackFinished_Implementation()
 			if(bWillKillUnit)
 			{
 				CurrentAttackPhase = EAttackPhase::Capture;
-				
-				bool WinningHit = GameMode->CheckWinCondition(false);
-				GEngine->AddOnScreenDebugMessage(-1,10.0f, FColor::Yellow, FString::Printf(TEXT("Winning hit: %d"), WinningHit));
+
+				if (GameMode->CheckWinCondition(false)) OnWinningHitPerformed();
 				
 				AttackTimeline->SetPlayRate(1.0f);
 				AttackTimeline->PlayFromStart();
@@ -548,6 +549,11 @@ void AChessGridManager::HandleAttackFinished_Implementation()
 			break;
 		}
 	}
+}
+
+void AChessGridManager::OnWinningHitPerformed_Implementation()
+{
+	
 }
 
 void AChessGridManager::PlayImpactFeedback_Implementation(AChessUnitBase* Attacker, AChessUnitBase* Target,bool bIsFatal) {}

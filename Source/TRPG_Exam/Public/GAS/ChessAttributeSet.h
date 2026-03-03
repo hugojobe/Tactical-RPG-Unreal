@@ -13,7 +13,7 @@
 	GAMEPLAYATTRIBUTE_VALUE_SETTER(PropertyName) \
 	GAMEPLAYATTRIBUTE_VALUE_INITTER(PropertyName)
 
-UCLASS()
+UCLASS(Blueprintable)
 class TRPG_EXAM_API UChessAttributeSet : public UAttributeSet
 {
 	GENERATED_BODY()
@@ -28,4 +28,10 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Attributes")
 	FGameplayAttributeData Damage;
 	ATTRIBUTE_ACCESSORS(UChessAttributeSet, Damage);
+	
+	UFUNCTION(BlueprintCallable, Category = "Attributes")
+	float GetHealthValue() const { return Health.GetCurrentValue(); }
+	
+	UFUNCTION(BlueprintCallable, Category = "Attributes")
+	float GetDamageValue() const { return Damage.GetCurrentValue(); }
 };

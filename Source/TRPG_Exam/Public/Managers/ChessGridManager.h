@@ -150,6 +150,9 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Combat Visuals")
 	void HandleAttackFinished();
 	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Combat Visuals")
+	void OnWinningHitPerformed();
+	
 	void RegisterStartingUnits();
 	
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "CombatLogic")
