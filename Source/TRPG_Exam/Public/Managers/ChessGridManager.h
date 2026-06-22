@@ -180,7 +180,7 @@ public:
 	void PlayerActionFinished();
 
 	UFUNCTION(BlueprintNativeEvent, Category = "Combat Feedback")
-	void PlayImpactFeedback(AChessUnitBase* Attacker, AChessUnitBase* Target, bool bIsFatal);
+	void PlayImpactFeedback(AChessUnitBase* Attacker, AChessUnitBase* Target, bool bIsFatal, int DamageReceived);
 	
 	bool CanTeamMove(EChessTeam Team, FVirtualBoard& Board);
 

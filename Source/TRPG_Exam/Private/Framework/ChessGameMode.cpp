@@ -494,14 +494,19 @@ bool AChessGameMode::CheckWinCondition_Implementation(bool TriggerGameOver)
 		}
 	}
 	
-	EChessTeam TeamToCheck = CurrentTurn == ETurnState::Player ? EChessTeam::Player : EChessTeam::Enemy;
-	if (!GridManager->CanTeamMove(TeamToCheck, VirtualBoard))
+	if (EnemyCount <= 0)
 	{
-		EChessTeam WinningTeam = (TeamToCheck == EChessTeam::Player) ? EChessTeam::Enemy : EChessTeam::Player;
-        
 		if (TriggerGameOver)
 		{
-			OnGameOver(WinningTeam);
+			OnGameOver(EChessTeam::Player, EGameOverCause::NoPiecesRemaining);
+		}
+		return true;
+	}
+	if (PlayerCount <= 0)
+	{
+		if (TriggerGameOver)
+		{
+			OnGameOver(EChessTeam::Enemy, EGameOverCause::NoPiecesRemaining);
 		}
 		return true;
 	}
@@ -510,7 +515,7 @@ bool AChessGameMode::CheckWinCondition_Implementation(bool TriggerGameOver)
 	{
 		if (TriggerGameOver)
 		{
-			OnGameOver(EChessTeam::Player);
+			OnGameOver(EChessTeam::Player, EGameOverCause::KingKilled);
 		}
 		return true;
 	}
@@ -518,24 +523,19 @@ bool AChessGameMode::CheckWinCondition_Implementation(bool TriggerGameOver)
 	{
 		if (TriggerGameOver)
 		{
-			OnGameOver(EChessTeam::Enemy);
+			OnGameOver(EChessTeam::Enemy, EGameOverCause::KingKilled);
 		}
 		return true;
 	}
-
-	if (EnemyCount == 0)
+	
+	EChessTeam TeamToCheck = CurrentTurn == ETurnState::Player ? EChessTeam::Enemy : EChessTeam::Player;
+	if (!GridManager->CanTeamMove(TeamToCheck, VirtualBoard))
 	{
+		EChessTeam WinningTeam = (TeamToCheck == EChessTeam::Player) ? EChessTeam::Enemy : EChessTeam::Player;
+        
 		if (TriggerGameOver)
 		{
-			OnGameOver(EChessTeam::Player);
-		}
-		return true;
-	}
-	if (PlayerCount == 0)
-	{
-		if (TriggerGameOver)
-		{
-			OnGameOver(EChessTeam::Enemy);
+			OnGameOver(WinningTeam, EGameOverCause::CantMove);
 		}
 		return true;
 	}
@@ -543,7 +543,7 @@ bool AChessGameMode::CheckWinCondition_Implementation(bool TriggerGameOver)
 	return false;
 }
 
-void AChessGameMode::OnGameOver_Implementation(EChessTeam WinningTeam)
+void AChessGameMode::OnGameOver_Implementation(EChessTeam WinningTeam, EGameOverCause Cause)
 {
 	SetCurrentTurn(ETurnState::None);
 }

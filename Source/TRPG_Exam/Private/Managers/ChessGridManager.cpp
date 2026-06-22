@@ -5,7 +5,7 @@
 #include "ToolBuilderUtil.h"
 #include "AI/ChessAIPlanner.h"
 #include "Components/TimelineComponent.h"
-#include "Framwork/ChessGameMode.h"
+#include "Framework/ChessGameMode.h"
 #include "Kismet/GameplayStatics.h"
 
 AChessGridManager::AChessGridManager()
@@ -67,6 +67,7 @@ void AChessGridManager::RegisterStartingUnits()
 		FVector Location = StartingUnit->GetActorLocation();
 		FIntPoint GridPos = WorldToGrid(Location);
 		RegisterUnitAt(GridPos, ChessUnit);
+		ChessUnit->ApplySkillTreeProgression();
 		
 		ChessUnit->OnUnitHoverUpdated.AddDynamic(this, &AChessGridManager::OnUnitHoverUpdated);
 		ChessUnit->OnUnitClicked.AddDynamic(this, &AChessGridManager::OnUnitClicked);
@@ -395,6 +396,7 @@ void AChessGridManager::HandleMoveFinished_Implementation()
 		SelectedUnit = nullptr;
 		IsUnitClicked = false;
 
+		GameMode->GenerateVirtualBoard();
 		PlayerActionFinished();
 	}
 }
@@ -503,8 +505,8 @@ void AChessGridManager::HandleAttackFinished_Implementation()
 		default: break;
 		case EAttackPhase::Rush:
 		{
-			AttackerUnit->DealDamageTo(AttackTargetUnit);
-			PlayImpactFeedback(AttackerUnit, AttackTargetUnit, bWillKillUnit);
+			int Damage = AttackerUnit->DealDamageTo(AttackTargetUnit);
+			PlayImpactFeedback(AttackerUnit, AttackTargetUnit, bWillKillUnit, Damage);
 				
 			if(bWillKillUnit)
 			{
@@ -556,7 +558,7 @@ void AChessGridManager::OnWinningHitPerformed_Implementation()
 	
 }
 
-void AChessGridManager::PlayImpactFeedback_Implementation(AChessUnitBase* Attacker, AChessUnitBase* Target,bool bIsFatal) {}
+void AChessGridManager::PlayImpactFeedback_Implementation(AChessUnitBase* Attacker, AChessUnitBase* Target,bool bIsFatal, int DamageReceived) {}
 
 void AChessGridManager::PlayerActionFinished_Implementation()
 {
@@ -589,7 +591,7 @@ bool AChessGridManager::CanTeamMove(EChessTeam Team, FVirtualBoard& Board)
 			VUnit.UnitMovementRule = Unit->MovementRule;
 			VUnit.UnitStats = Unit->Stats;
 			VUnit.UnitType = Unit->UnitType;
-            
+			
 			TMap<FIntPoint, ETileInteraction> ValidMoves = GetValidMoves(VUnit, Elem.Key, Board, false);
             
 			if (ValidMoves.Num() > 0)
@@ -598,5 +600,6 @@ bool AChessGridManager::CanTeamMove(EChessTeam Team, FVirtualBoard& Board)
 			}
 		}
 	}
+	
 	return false;
 }

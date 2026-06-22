@@ -63,7 +63,7 @@ public:
 	bool CheckWinCondition(bool TriggerGameOver = true);
 
 	UFUNCTION(BlueprintNativeEvent, Category = "Game Flow")
-	void OnGameOver(EChessTeam WinningTeam);
+	void OnGameOver(EChessTeam WinningTeam, EGameOverCause Cause);
 	
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "AI")
 	void GenerateVirtualBoard();

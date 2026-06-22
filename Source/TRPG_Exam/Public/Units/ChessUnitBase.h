@@ -10,6 +10,8 @@
 #include "AbilitySystemComponent.h"
 #include "GAS/ChessAttributeSet.h"
 #include "ChessUnitBase.generated.h"
+#include "ResearchTree/ChessSkillTreeSubsystem.h"
+#include "Kismet/GameplayStatics.h"
 
 class AChessAIController;
 class AChessGridManager;
@@ -92,7 +94,10 @@ public:
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilitySystemComponent; }
 
 	UFUNCTION(BlueprintCallable, Category = "GAS")
-	void DealDamageTo(AChessUnitBase* Target);
+	int DealDamageTo(AChessUnitBase* Target);
+	
+	UFUNCTION(BlueprintCallable, Category = "SkillTree")
+	void ApplySkillTreeProgression();
 
 protected:
 	virtual void BeginPlay() override;

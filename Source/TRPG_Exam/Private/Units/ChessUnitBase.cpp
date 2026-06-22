@@ -4,7 +4,7 @@
 
 #include "AI/ChessAIController.h"
 #include "Components/StaticMeshComponent.h"
-#include "Framwork/ChessGameMode.h"
+#include "Framework/ChessGameMode.h"
 #include "Managers/ChessGridManager.h"
 
 AChessUnitBase::AChessUnitBase()
@@ -48,6 +48,49 @@ void AChessUnitBase::BeginPlay()
 	InitializeStats();
 }
 
+void AChessUnitBase::ApplySkillTreeProgression()
+{
+	if (Team != EChessTeam::Player) return;
+	if (!AbilitySystemComponent) return;
+	
+	UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
+	if (!GI) return;
+	
+	UChessSkillTreeSubsystem* SkillTree = GI->GetSubsystem<UChessSkillTreeSubsystem>();
+	if (!SkillTree) return;
+	
+	TArray<FSkillNodeData> PassiveNodes = SkillTree->GetPurchasedPassiveNodes(UnitType);
+
+	for (const FSkillNodeData& Node : PassiveNodes)
+	{
+		if (!Node.PassiveEffect) continue;
+
+		FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
+
+		FGameplayEffectSpecHandle Spec = AbilitySystemComponent->MakeOutgoingSpec(Node.PassiveEffect, 1.f, Context);
+
+		if (Spec.IsValid())
+		{
+			AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+		}
+	}
+	
+	FSkillNodeData EquippedNode;
+	if (SkillTree->GetEquippedAbilityNode(UnitType, EquippedNode))
+	{
+		if (EquippedNode.GrantedAbility)
+		{
+			FGameplayAbilitySpec AbilitySpec(
+				EquippedNode.GrantedAbility,
+				EquippedNode.AbilityLevel,
+				INDEX_NONE,
+				this
+			);
+			AbilitySystemComponent->GiveAbility(AbilitySpec);
+		}
+	}
+}
+
 void AChessUnitBase::InitializeStats()
 {
 	if(!UnitStatsTable)
@@ -80,9 +123,9 @@ void AChessUnitBase::InitializeStats()
 	}
 }
 
-void AChessUnitBase::DealDamageTo(AChessUnitBase* Target)
+int AChessUnitBase::DealDamageTo(AChessUnitBase* Target)
 {
-	if (!Target || !Target->GetAbilitySystemComponent()) return;
+	if (!Target || !Target->GetAbilitySystemComponent()) return 0;
 
 	FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
 	Context.AddSourceObject(this);
@@ -99,6 +142,8 @@ void AChessUnitBase::DealDamageTo(AChessUnitBase* Target)
 	DamageEffect->Modifiers.Add(ModifierInfo);
 
 	Target->GetAbilitySystemComponent()->ApplyGameplayEffectToSelf(DamageEffect, 1.0f, Context);
+	
+	return Damage;
 }
 
 void AChessUnitBase::NotifyActorBeginCursorOver()

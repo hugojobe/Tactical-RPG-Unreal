@@ -51,3 +51,18 @@ enum class EAttackPhase : uint8
 	Return,
 	Capture
 };
+
+UENUM(BlueprintType)
+enum class EGameOverCause : uint8
+{
+	NoPiecesRemaining	UMETA(DisplayName = "No Pieces Remaining"),
+	KingKilled			UMETA(DisplayName = "King Killed"),		
+	CantMove			UMETA(DisplayName = "Can't Move")
+};
+
+UENUM(BlueprintType)
+enum class ESkillNodeType : uint8
+{
+	Passive     UMETA(DisplayName = "Passif (effet immédiat)"),
+	Equippable  UMETA(DisplayName = "Équipable (ability à slot)"),
+};
