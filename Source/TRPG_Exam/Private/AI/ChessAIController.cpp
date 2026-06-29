@@ -4,7 +4,7 @@
 #include "AI/ChessAIController.h"
 
 #include "AI/ChessAIPlanner.h"
-#include "Framwork/ChessGameMode.h"
+#include "Framework/ChessGameMode.h"
 #include "Kismet/GameplayStatics.h"
 #include "Managers/ChessGridManager.h"
 

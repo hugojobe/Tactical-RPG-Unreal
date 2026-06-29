@@ -1,7 +1,7 @@
 // By hugojobe.
 
 
-#include "Framwork/ChessGameMode.h"
+#include "Framework/ChessGameMode.h"
 #include "AI/ChessAIController.h"
 #include "AI/ChessAIPlanner.h"
 #include "Kismet/GameplayStatics.h"

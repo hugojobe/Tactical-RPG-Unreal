@@ -63,6 +63,6 @@ enum class EGameOverCause : uint8
 UENUM(BlueprintType)
 enum class ESkillNodeType : uint8
 {
-	Passive     UMETA(DisplayName = "Passif (effet immédiat)"),
-	Equippable  UMETA(DisplayName = "Équipable (ability à slot)"),
+	Passive     UMETA(DisplayName = "Passive"),
+	Equippable  UMETA(DisplayName = "Equipable"),
 };

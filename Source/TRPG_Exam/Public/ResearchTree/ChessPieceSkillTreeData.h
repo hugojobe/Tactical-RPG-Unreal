@@ -36,8 +36,6 @@ struct FSkillNodeData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<FName> RequiredNodeIDs;
 	
-	
-	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "Type == ESkillNodeType::Passive"))
 	TSubclassOf<UGameplayEffect> PassiveEffect;
 	
@@ -56,6 +54,12 @@ class TRPG_EXAM_API UChessPieceSkillTreeData : public UPrimaryDataAsset
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Setup")
 	EChessUnitType UnitType;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Root Node")
+	UTexture2D* RootIcon = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Root Node")
+	FText RootDisplayName;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nodes")
 	TArray<FSkillNodeData> Nodes;

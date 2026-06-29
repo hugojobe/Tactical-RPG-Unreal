@@ -1,7 +1,7 @@
 ﻿#include "AI/ChessAIPlanner.h"
 
 #include "HLSLMathAliases.h"
-#include "Framwork/ChessGameMode.h"
+#include "Framework/ChessGameMode.h"
 #include "Managers/ChessGridManager.h"
 
 

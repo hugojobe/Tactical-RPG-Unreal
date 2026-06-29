@@ -9,9 +9,9 @@
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
 #include "GAS/ChessAttributeSet.h"
-#include "ChessUnitBase.generated.h"
 #include "ResearchTree/ChessSkillTreeSubsystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "ChessUnitBase.generated.h"
 
 class AChessAIController;
 class AChessGridManager;
