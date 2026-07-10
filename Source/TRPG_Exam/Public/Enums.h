@@ -66,3 +66,12 @@ enum class ESkillNodeType : uint8
 	Passive     UMETA(DisplayName = "Passive"),
 	Equippable  UMETA(DisplayName = "Equipable"),
 };
+
+UENUM(BlueprintType)
+enum class ESkillNodeState : uint8
+{
+	Locked,
+	Unlockable,
+	Purchased, 
+	Equipped,
+};

@@ -157,8 +157,7 @@ bool UChessSkillTreeSubsystem::GetEquippedAbilityNode(EChessUnitType PieceType, 
 	return true;
 }
 
-bool UChessSkillTreeSubsystem::AreRequirementsMet(
-	EChessUnitType PieceType, const FSkillNodeData& Node) const
+bool UChessSkillTreeSubsystem::AreRequirementsMet(EChessUnitType PieceType, const FSkillNodeData& Node) const
 {
 	for (const FName& RequiredID : Node.RequiredNodeIDs)
 	{

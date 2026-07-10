@@ -2,12 +2,12 @@
 
 static const TMap<EChessUnitType, float> PieceBaseAngles =
 {
-    { EChessUnitType::Pawn,   270.f },
+    { EChessUnitType::Pawn, 270.f },
     { EChessUnitType::Knight, 330.f },
-    { EChessUnitType::Bishop,  30.f },
-    { EChessUnitType::Rook,    90.f },
-    { EChessUnitType::Queen,  150.f },
-    { EChessUnitType::King,   210.f },
+    { EChessUnitType::Bishop, 30.f },
+    { EChessUnitType::Rook, 90.f },
+    { EChessUnitType::Queen, 150.f },
+    { EChessUnitType::King, 210.f },
 };
 
 TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
@@ -27,7 +27,6 @@ TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
         UChessPieceSkillTreeData* TreeData = Pair.Value;
         
         if (!TreeData) continue;
-        // Ne pas skip si Nodes est vide — on veut quand même le root
 
         const float* BaseAngleDeg = PieceBaseAngles.Find(PieceType);
         
@@ -37,7 +36,6 @@ TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
         TMap<FName, FNodeWork> WorkMap;
         TMap<FName, TArray<FName>> ChildrenMap;
 
-        // --- Node racine synthétique ---
         const FName RootID = FName(*FString::Printf(TEXT("ROOT_%d"),
             static_cast<int32>(PieceType)));
 
@@ -57,19 +55,17 @@ TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
         WorkMap.Add(RootID, RootWork);
         ChildrenMap.Add(RootID, TArray<FName>());
 
-        // --- PASSE UNIQUE : construire WorkMap + ChildrenMap ---
         for (int32 i = 0; i < TreeData->Nodes.Num(); ++i)
         {
             const FSkillNodeData& NodeData = TreeData->Nodes[i];
 
             FNodeWork Work;
-            Work.NodeID    = NodeData.NodeID;
-            Work.Depth     = 0;
-            Work.Angle     = BaseAngleRad;
+            Work.NodeID = NodeData.NodeID;
+            Work.Depth = 0;
+            Work.Angle = BaseAngleRad;
             Work.LeafCount = 1;
-            Work.Data      = NodeData;
+            Work.Data = NodeData;
 
-            // Parent : premier RequiredNodeID, ou root synthétique si vide
             if (NodeData.RequiredNodeIDs.IsEmpty())
             {
                 Work.ParentID = RootID;
@@ -83,7 +79,6 @@ TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
             ChildrenMap.Add(NodeData.NodeID, TArray<FName>());
         }
 
-        // Relier les enfants à leurs parents (après que tous les nodes sont dans la map)
         for (const FSkillNodeData& NodeData : TreeData->Nodes)
         {
             const FName ParentID = WorkMap[NodeData.NodeID].ParentID;
@@ -92,15 +87,12 @@ TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
                 Children->Add(NodeData.NodeID);
             }
         }
-
-        // --- Passe 1 : LeafCount (bottom-up) ---
-        // Inclure le root dans le calcul
+        
         TArray<FName> AllIDs;
         AllIDs.Add(RootID);
         for (const FSkillNodeData& NodeData : TreeData->Nodes)
             AllIDs.Add(NodeData.NodeID);
 
-        // Ordre inverse = feuilles d'abord
         for (int32 i = AllIDs.Num() - 1; i >= 0; i--)
         {
             const FName& ID = AllIDs[i];
@@ -118,12 +110,10 @@ TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
             }
         }
 
-        // --- Passe 2 : AssignAngles ---
         const int32 RootLeaves = WorkMap[RootID].LeafCount;
         const float TotalSpan  = HalfSpanRad * FMath::Max(RootLeaves, 1);
         AssignAngles(RootID, BaseAngleRad, TotalSpan, WorkMap, ChildrenMap);
 
-        // --- Passe 3 : Profondeur BFS + position écran ---
         TQueue<FName> Queue;
         Queue.Enqueue(RootID);
         WorkMap[RootID].Depth = 1;
@@ -139,7 +129,6 @@ TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
             }
         }
 
-        // --- Convertir en entries ---
         for (auto& WorkPair : WorkMap)
         {
             FNodeWork& Work = WorkPair.Value;
@@ -150,11 +139,11 @@ TArray<FSkillNodeLayoutEntry> UChessSkillTreeLayout::ComputeFullLayout(
             );
 
             FSkillNodeLayoutEntry Entry;
-            Entry.NodeID       = Work.NodeID;
+            Entry.NodeID = Work.NodeID;
             Entry.ParentNodeID = Work.ParentID;
-            Entry.Position     = Pos;
-            Entry.NodeData     = Work.Data;
-            Entry.PieceType    = PieceType;
+            Entry.Position = Pos;
+            Entry.NodeData = Work.Data;
+            Entry.PieceType = PieceType;
             Result.Add(Entry);
         }
     }
@@ -180,7 +169,7 @@ void UChessSkillTreeLayout::AssignAngles(
     for (const FName& ChildID : Children)
     {
         const int32 ChildLeaves = WorkMap[ChildID].LeafCount;
-        const float ChildSpan   = HalfSpan * 2.f * ChildLeaves / TotalLeaves;
+        const float ChildSpan = HalfSpan * 2.f * ChildLeaves / TotalLeaves;
         const float ChildCenter = CurrentAngle + ChildSpan * 0.5f;
 
         AssignAngles(ChildID, ChildCenter, ChildSpan * 0.5f, WorkMap, ChildrenMap);
