@@ -80,6 +80,9 @@ public:
 	UFUNCTION(BlueprintNativeEvent, Category = "AI")
 	void ComputeGlobalAI(FChessDecision& BestTask, AChessUnitBase*& OutBestUnit, const TArray<AChessUnitBase*>& EnemyUnitsThinking);
 	
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void TickAbilityCooldowns(EChessTeam Team);
+	
 	UFUNCTION(Exec)
 	void DisplayVirtualBoard();
 	

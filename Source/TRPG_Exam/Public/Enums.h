@@ -5,7 +5,9 @@ enum class ETileInteraction : uint8
 {
 	None,
 	Move,
-	Attack
+	Attack,
+	AbilityTarget,
+	Blocked
 };
 
 UENUM(BlueprintType)
@@ -74,4 +76,31 @@ enum class ESkillNodeState : uint8
 	Unlockable,
 	Purchased, 
 	Equipped,
+};
+
+UENUM(BlueprintType)
+enum class EChessAbilityType : uint8
+{
+	None			UMETA(DisplayName = "None"),
+	// Pawn
+	FirstCharge		UMETA(DisplayName = "First Charge"),
+	Caltrop			UMETA(DisplayName = "Caltrop"),
+	// Bishop
+	Translation		UMETA(DisplayName = "Translation"),
+	Blessing		UMETA(DisplayName = "Blessing"),
+	// Knight
+	Intimidation	UMETA(DisplayName = "Intimidation"),
+	DoubleLeap		UMETA(DisplayName = "Double Leap"),
+	// Rook
+	GreatCastle		UMETA(DisplayName = "Great Castle"),
+	Bastion			UMETA(DisplayName = "Bastion"),
+	// Queen
+	Execution		UMETA(DisplayName = "Execution"),
+	Repulsion		UMETA(DisplayName = "Repulsion"),
+	// King
+	Escape			UMETA(DisplayName = "Escape"),
+	Swap			UMETA(DisplayName = "Swap"),
+	// Emperor
+	Summon			UMETA(DisplayName = "Summon"),
+	Punishment		UMETA(DisplayName = "Punishment"),
 };

@@ -14,6 +14,7 @@
 class AChessGameMode;
 class UTimelineComponent;
 class UCurveFloat;
+class UChessAbilityBase;
 struct FVirtualBoard;
 
 USTRUCT(BlueprintType)
@@ -183,13 +184,39 @@ public:
 	void PlayImpactFeedback(AChessUnitBase* Attacker, AChessUnitBase* Target, bool bIsFatal, int DamageReceived);
 	
 	bool CanTeamMove(EChessTeam Team, FVirtualBoard& Board);
+	
+	static FVirtualUnit MakeVirtualUnit(const AChessUnitBase* Unit);
+	
+// ABILITIES
+	UPROPERTY(BlueprintReadOnly, Category = "Abilities")
+	bool bAbilityTargetingMode = false;
+	
+	UFUNCTION(BlueprintPure, Category = "Abilities")
+	UChessAbilityBase* GetSelectedUnitAbility() const;
+	
+	UFUNCTION(BlueprintPure, Category = "Abilities")
+	bool CanUseSelectedUnitAbility() const;
+	
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void OnAbilityButtonPressed();
+	
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void EnterAbilityTargetingMode();
+	
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ActivateSelectedUnitAbility(FIntPoint TargetPos);
+	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Abilities")
+	void OnAbilityTargetingModeChanged(bool bEnabled);
+	
+	void ClearHighlightedTiles();
 
 // CHESSBOARD INTERFACES
 	virtual bool IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const override;
 	virtual bool IsTileOccupied(const FIntPoint& Pos) const override;
 	virtual EChessTeam GetTeamAt(const FIntPoint& Pos) const override;
 
-	// Editor Tools
+// Editor Tools
 	UFUNCTION(CallInEditor, Category = "Grid Visuals")
 	void GenerateGrid();
 	

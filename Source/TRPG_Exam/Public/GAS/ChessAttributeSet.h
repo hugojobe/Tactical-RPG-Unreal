@@ -22,12 +22,19 @@ public:
 	UChessAttributeSet();
 	
 	UPROPERTY(BlueprintReadOnly, Category = "Attributes")
+	FGameplayAttributeData MaxHealth;
+	ATTRIBUTE_ACCESSORS(UChessAttributeSet, MaxHealth);
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Attributes")
 	FGameplayAttributeData Health;
 	ATTRIBUTE_ACCESSORS(UChessAttributeSet, Health);
 	
 	UPROPERTY(BlueprintReadOnly, Category = "Attributes")
 	FGameplayAttributeData Damage;
 	ATTRIBUTE_ACCESSORS(UChessAttributeSet, Damage);
+	
+	UFUNCTION(BlueprintCallable, Category = "Attributes")
+	float GetMaxHealthValue() const { return MaxHealth.GetCurrentValue(); }
 	
 	UFUNCTION(BlueprintCallable, Category = "Attributes")
 	float GetHealthValue() const { return Health.GetCurrentValue(); }

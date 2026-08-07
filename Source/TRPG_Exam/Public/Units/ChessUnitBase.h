@@ -90,6 +90,17 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
 	UChessAttributeSet* Attributes;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills")
+	TArray<TSubclassOf<UGameplayEffect>> PassiveEffects;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skills")
+	TSubclassOf<UGameplayAbility> ActiveAbility;
+
+	FGameplayAbilitySpecHandle ActiveAbilityHandle;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Skills")
+	FIntPoint PendingAbilityTarget = FIntPoint(-1, -1);
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilitySystemComponent; }
 

@@ -192,11 +192,7 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 	if (!GridManager) return BestOverallDecision;
 	
 	FIntPoint UnitOriginalPos = FIntPoint(MyUnit->GridCoordinates.X, MyUnit->GridCoordinates.Y);
-	FVirtualUnit VUnit;
-	VUnit.Team = MyUnit->Team;
-	VUnit.UnitMovementRule = MyUnit->MovementRule;
-	VUnit.UnitStats = MyUnit->Stats;
-	VUnit.UnitType = MyUnit->UnitType;
+	FVirtualUnit VUnit = AChessGridManager::MakeVirtualUnit(MyUnit);
 	TMap<FIntPoint, ETileInteraction> PossibleFirstMove = GridManager->GetValidMoves(VUnit, UnitOriginalPos, GridManager->GameMode->VirtualBoard);
 	
 	SearchStartTime = FPlatformTime::Seconds();

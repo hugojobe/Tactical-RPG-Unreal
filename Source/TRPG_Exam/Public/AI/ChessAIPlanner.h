@@ -49,6 +49,15 @@ struct FVirtualUnit
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     EChessUnitType UnitType;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bHasMoved = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bAbilityUsedThisMatch = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 RootedTurns = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -61,12 +70,12 @@ public:
     int Height = 6;
     
     FVirtualUnit Grid[MAX_CHESS_BOARD_SIZE];
-    
+
     int32 GetIndex(const FIntPoint& Pos) const;
-    
+
     void MoveUnit(FIntPoint SourcePos, FIntPoint TargetPos, FVirtualUnit Unit);
     void AttackUnit(FIntPoint SourcePos, FIntPoint TargetPos, FVirtualUnit SourceUnit, FVirtualUnit TargetUnit);
-    
+
     uint64 ComputeHash(const uint64 Zobrist[64][3][7], bool bIsMaximizing) const;
     virtual bool IsValidGridPos(const FIntPoint& Pos, int BoardWidth, int BoardHeight) const;
     virtual bool IsTileOccupied(const FIntPoint& Pos) const;

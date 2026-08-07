@@ -45,13 +45,42 @@ AChessUnitBase::AChessUnitBase()
 void AChessUnitBase::BeginPlay()
 {
 	Super::BeginPlay();
-	InitializeStats();
+	
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
 }
 
 void AChessUnitBase::ApplySkillTreeProgression()
 {
-	if (Team != EChessTeam::Player) return;
 	if (!AbilitySystemComponent) return;
+	
+	if (Team != EChessTeam::Player) {
+		for (const TSubclassOf<UGameplayEffect> Effect : PassiveEffects)
+		{
+			FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
+			FGameplayEffectSpecHandle Spec = AbilitySystemComponent->MakeOutgoingSpec(Effect, 1.f, Context);
+			if (Spec.IsValid())
+			{
+				AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+			}
+		}
+		
+		if (IsValid(ActiveAbility))
+		{
+			FGameplayAbilitySpec AbilitySpec(
+				ActiveAbility,
+				1.f,
+				INDEX_NONE,
+				this
+			);
+			
+			ActiveAbilityHandle = AbilitySystemComponent->GiveAbility(AbilitySpec);
+		}
+		
+		return;
+	}
 	
 	UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
 	if (!GI) return;
@@ -86,7 +115,8 @@ void AChessUnitBase::ApplySkillTreeProgression()
 				INDEX_NONE,
 				this
 			);
-			AbilitySystemComponent->GiveAbility(AbilitySpec);
+			
+			ActiveAbilityHandle = AbilitySystemComponent->GiveAbility(AbilitySpec);
 		}
 	}
 }
@@ -114,6 +144,7 @@ void AChessUnitBase::InitializeStats()
 		Stats.KillRpReward = RowData->KillRpReward;
 		MovementRule = RowData->MovementRule;
 
+		Attributes->InitMaxHealth(RowData->MaxHP);
 		Attributes->InitHealth(RowData->MaxHP);
 		Attributes->InitDamage(RowData->Damage);
 	}

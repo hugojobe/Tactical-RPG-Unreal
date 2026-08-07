@@ -7,6 +7,8 @@
 #include "Components/TimelineComponent.h"
 #include "Framework/ChessGameMode.h"
 #include "Kismet/GameplayStatics.h"
+#include "GAS/ChessAbilityBase.h"
+#include "GAS/ChessGameplayTags.h"
 
 AChessGridManager::AChessGridManager()
 {
@@ -66,7 +68,9 @@ void AChessGridManager::RegisterStartingUnits()
 		AChessUnitBase* ChessUnit = Cast<AChessUnitBase>(StartingUnit);
 		FVector Location = StartingUnit->GetActorLocation();
 		FIntPoint GridPos = WorldToGrid(Location);
+		
 		RegisterUnitAt(GridPos, ChessUnit);
+		ChessUnit->InitializeStats();
 		ChessUnit->ApplySkillTreeProgression();
 		
 		ChessUnit->OnUnitHoverUpdated.AddDynamic(this, &AChessGridManager::OnUnitHoverUpdated);
@@ -133,10 +137,22 @@ bool AChessGridManager::IsValidGridPos(FIntPoint GridPos)
 	return IsValidGridPos(GridPos, BoardWidth, BoardHeight);
 }
 
+void AChessGridManager::ClearHighlightedTiles()
+{
+	for (const auto& TilePair : HighlightedTiles)
+	{
+		if (AChessTileBase* Tile = TileActors.FindRef(TilePair.Key))
+		{
+			Tile->SetHighlight(ETileInteraction::None);
+		}
+	}
+	
+	HighlightedTiles.Empty();
+}
+
 bool AChessGridManager::IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const
 {
-	return (Pos.X >= 0 && Pos.X < Width &&
-			Pos.Y >= 0 && Pos.Y < Height);
+	return (Pos.X >= 0 && Pos.X < Width && Pos.Y >= 0 && Pos.Y < Height);
 }
 
 void AChessGridManager::ClearBoardVisuals()
@@ -213,6 +229,8 @@ TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(FVirtualUnit 
 	
 	for (const FChessDecision& Decision : RawMoves)
 	{
+		if (Unit.RootedTurns > 0 && Decision.Type == EChessDecisionType::Move) continue;
+		
 		ETileInteraction Interaction = (Decision.Type == EChessDecisionType::Attack) ? ETileInteraction::Attack : ETileInteraction::Move;
 		Result.Add(Decision.TargetPosition, Interaction);
 	}
@@ -223,6 +241,19 @@ TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(FVirtualUnit 
 void AChessGridManager::OnTileClicked_Implementation(AChessTileBase* ClickedTile)
 {
 	if (!IsUnitClicked || CurrentTurnActionState != ETurnState::Player) return;
+	
+	if (bAbilityTargetingMode)
+	{
+		if (HighlightedTiles.Contains(ClickedTile->GridPosition) && HighlightedTiles[ClickedTile->GridPosition] == ETileInteraction::AbilityTarget)
+		{
+			ActivateSelectedUnitAbility(ClickedTile->GridPosition);
+		}
+		else
+		{
+			OnAbilityButtonPressed();
+		}
+		return;
+	}
 	
 	FIntPoint TilePos = ClickedTile->GridPosition;
 	AChessUnitBase* UnitOnTile = GetUnitAt(TilePos);
@@ -246,6 +277,20 @@ void AChessGridManager::OnTileClicked_Implementation(AChessTileBase* ClickedTile
 void AChessGridManager::OnUnitClicked_Implementation(AChessUnitBase* Unit)
 {
 	if(CurrentTurnActionState != ETurnState::Player) return;
+	
+	if (bAbilityTargetingMode && IsUnitClicked && Unit)
+	{
+		const FIntPoint UnitPos = FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
+		if (HighlightedTiles.Contains(UnitPos) && HighlightedTiles[UnitPos] == ETileInteraction::AbilityTarget)
+		{
+			ActivateSelectedUnitAbility(UnitPos);
+		}
+		else
+		{
+			OnAbilityButtonPressed();
+		}
+		return;
+	}
 	
 	if (!IsUnitClicked)
 	{
@@ -282,6 +327,12 @@ void AChessGridManager::OnUnitHoverUpdated_Implementation(AChessUnitBase* Unit)
 
 void AChessGridManager::DeselectUnit_Implementation()
 {	
+	if (bAbilityTargetingMode)
+	{
+		bAbilityTargetingMode = false;
+		OnAbilityTargetingModeChanged(false);
+	}
+	
 	if(SelectedUnit != nullptr){
  		SelectedUnit->OnUnitUnclickedFeedback();
  		SelectedUnit = nullptr;
@@ -301,11 +352,7 @@ void AChessGridManager::HighlightTilesForUnit_Implementation(AChessUnitBase* Uni
 		{
 			SelectedUnit = Unit;
 			
-			FVirtualUnit VUnit;
-			VUnit.Team = Unit->Team;
-			VUnit.UnitMovementRule = Unit->MovementRule;
-			VUnit.UnitStats = Unit->Stats;
-			VUnit.UnitType = Unit->UnitType;
+			FVirtualUnit VUnit = MakeVirtualUnit(Unit);
 			
 			HighlightedTiles = GetValidMoves(VUnit, FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), GameMode->VirtualBoard, false);
 			
@@ -603,3 +650,134 @@ bool AChessGridManager::CanTeamMove(EChessTeam Team, FVirtualBoard& Board)
 	
 	return false;
 }
+
+FVirtualUnit AChessGridManager::MakeVirtualUnit(const AChessUnitBase* Unit)
+{
+	FVirtualUnit VUnit;
+	if (!Unit) return VUnit;
+
+	VUnit.Team = Unit->Team;
+	VUnit.UnitMovementRule = Unit->MovementRule;
+	VUnit.UnitStats = Unit->Stats;
+	
+	VUnit.UnitStats.CurrentHP = static_cast<int32>(Unit->Attributes->GetHealth());
+	VUnit.UnitType = Unit->UnitType;
+
+	if (Unit->AbilitySystemComponent)
+	{
+		const FGameplayEffectQuery RootedQuery = FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(FGameplayTagContainer(TAG_Ability_Rooted));
+		for (const FActiveGameplayEffectHandle& EffectHandle : Unit->AbilitySystemComponent->GetActiveEffects(RootedQuery))
+		{
+			VUnit.RootedTurns = FMath::Max(VUnit.RootedTurns, Unit->AbilitySystemComponent->GetCurrentStackCount(EffectHandle));
+		}
+	}
+
+	return VUnit;
+}
+
+UChessAbilityBase* AChessGridManager::GetSelectedUnitAbility() const
+{
+	if (!SelectedUnit || !SelectedUnit->AbilitySystemComponent) return nullptr;
+
+	FGameplayAbilitySpec* Spec = SelectedUnit->AbilitySystemComponent->FindAbilitySpecFromHandle(SelectedUnit->ActiveAbilityHandle);
+	if (!Spec) return nullptr;
+
+	return Cast<UChessAbilityBase>(Spec->Ability);
+}
+
+bool AChessGridManager::CanUseSelectedUnitAbility() const
+{
+	if (!SelectedUnit || !SelectedUnit->AbilitySystemComponent) return false;
+	if (SelectedUnit->Team != EChessTeam::Player) return false;
+
+	UChessAbilityBase* Ability = GetSelectedUnitAbility();
+	if (!Ability) return false;
+
+	if (SelectedUnit->AbilitySystemComponent->HasMatchingGameplayTag(TAG_Ability_Cooldown)) return false;
+
+	if (Ability->Targeting != EChessAbilityTargeting::Self && Ability->GetValidTargets(SelectedUnit).Num() == 0) return false;
+
+	return true;
+}
+
+void AChessGridManager::OnAbilityButtonPressed()
+{
+	if (!SelectedUnit || CurrentTurnActionState != ETurnState::Player) return;
+
+	if (bAbilityTargetingMode)
+	{
+		bAbilityTargetingMode = false;
+		OnAbilityTargetingModeChanged(false);
+		ClearHighlightedTiles();
+		HighlightTilesForUnit(SelectedUnit);
+		return;
+	}
+
+	if (!CanUseSelectedUnitAbility()) return;
+
+	UChessAbilityBase* Ability = GetSelectedUnitAbility();
+	if (Ability->Targeting == EChessAbilityTargeting::Self)
+	{
+		ActivateSelectedUnitAbility(FIntPoint(SelectedUnit->GridCoordinates.X, SelectedUnit->GridCoordinates.Y));
+	}
+	else
+	{
+		EnterAbilityTargetingMode();
+	}
+}
+
+void AChessGridManager::EnterAbilityTargetingMode()
+{
+	UChessAbilityBase* Ability = GetSelectedUnitAbility();
+	if (!Ability || !SelectedUnit) return;
+
+	ClearHighlightedTiles();
+
+	for (const FIntPoint& Target : Ability->GetValidTargets(SelectedUnit))
+	{
+		if (AChessTileBase* Tile = TileActors.FindRef(Target))
+		{
+			HighlightedTiles.Add(Target, ETileInteraction::AbilityTarget);
+			Tile->SetHighlight(ETileInteraction::AbilityTarget);
+		}
+	}
+
+	bAbilityTargetingMode = true;
+	OnAbilityTargetingModeChanged(true);
+}
+
+void AChessGridManager::ActivateSelectedUnitAbility(FIntPoint TargetPos)
+{
+	if (!SelectedUnit || CurrentTurnActionState != GameMode->CurrentTurn) return;
+
+	SelectedUnit->PendingAbilityTarget = TargetPos;
+
+	if (SelectedUnit->AbilitySystemComponent->TryActivateAbility(SelectedUnit->ActiveAbilityHandle))
+	{
+		bAbilityTargetingMode = false;
+		OnAbilityTargetingModeChanged(false);
+		
+		UAbilitySystemComponent* ASC = SelectedUnit->AbilitySystemComponent;
+		UE_LOG(LogTemp, Warning, TEXT("[HJ] Post-activation: CooldownTag=%d RootedTag=%d"),
+			ASC->HasMatchingGameplayTag(TAG_Ability_Cooldown) ? 1 : 0,
+			ASC->HasMatchingGameplayTag(TAG_Ability_Rooted) ? 1 : 0);
+
+		FGameplayTagContainer DebugTags;
+		DebugTags.AddTag(TAG_Ability_Cooldown);
+		DebugTags.AddTag(TAG_Ability_Rooted);
+		const FGameplayEffectQuery DebugQuery = FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(DebugTags);
+		for (const FActiveGameplayEffectHandle& EffectHandle : ASC->GetActiveEffects(DebugQuery))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[HJ] Turn-stack effect active, stacks: %d"), ASC->GetCurrentStackCount(EffectHandle));
+		}
+		
+		DeselectUnit();
+		GameMode->GenerateVirtualBoard();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[HJ] Ability activation failed on %s"), *SelectedUnit->GetName());
+	}
+}
+
+void AChessGridManager::OnAbilityTargetingModeChanged_Implementation(bool bEnabled) {}

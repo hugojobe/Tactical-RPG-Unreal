@@ -6,6 +6,7 @@
 #include "AI/ChessAIPlanner.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
+#include "GAS/ChessGameplayTags.h"
 #include "Managers/ChessGridManager.h"
 
 AChessGameMode::AChessGameMode() {}
@@ -41,11 +42,7 @@ void AChessGameMode::GenerateVirtualBoard_Implementation()
 			
 			if (Unit == nullptr) continue;
 			
-			FVirtualUnit VUnit;
-			VUnit.Team = Unit->Team;
-			VUnit.UnitMovementRule = Unit->MovementRule;
-			VUnit.UnitStats = Unit->Stats;
-			VUnit.UnitType = Unit->UnitType;
+			FVirtualUnit VUnit = AChessGridManager::MakeVirtualUnit(Unit);
 			VUnitMap.Add(TileTuple.Key, VUnit);
 		}
 	}
@@ -131,6 +128,8 @@ void AChessGameMode::EndEnemyTurn_Implementation()
 	SetCurrentTurn(ETurnState::Player);
 	GridManager->CurrentTurnActionState = ETurnState::None;
 	
+	TickAbilityCooldowns(EChessTeam::Player);
+	
 	GenerateVirtualBoard();
 	
 	StartPlayerTurn();
@@ -141,6 +140,8 @@ void AChessGameMode::StartEnemyTurn_Implementation()
 {   
 	SetCurrentTurn(ETurnState::Enemy);
 	GridManager->CurrentTurnActionState = ETurnState::Enemy;
+	
+	TickAbilityCooldowns(EChessTeam::Enemy);
     
 	FTimerHandle TimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
@@ -252,6 +253,36 @@ void AChessGameMode::ComputeGlobalAI_Implementation(FChessDecision& BestTask, AC
 void AChessGameMode::SetCurrentTurn_Implementation(ETurnState NewTurnState)
 {
 	CurrentTurn = NewTurnState;
+}
+
+void AChessGameMode::TickAbilityCooldowns(EChessTeam Team)
+{
+	TArray<AActor*> Units;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), Units);
+
+	UE_LOG(LogTemp, Warning, TEXT("[HJ] TickAbilityCooldowns for team %d"), static_cast<int32>(Team));
+	
+	for (AActor* Actor : Units)
+	{
+		AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor);
+		if (!Unit || Unit->Team != Team || !Unit->AbilitySystemComponent) continue;
+		if (Unit->Attributes->GetHealth() <= 0) continue;
+		
+		FGameplayTagContainer TickTags;
+		TickTags.AddTag(TAG_Ability_Cooldown);
+		TickTags.AddTag(TAG_Ability_Rooted);
+		
+		const FGameplayEffectQuery Query = FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(TickTags);
+	
+		TArray<FActiveGameplayEffectHandle> Handles = Unit->AbilitySystemComponent->GetActiveEffects(Query);
+		for (const FActiveGameplayEffectHandle& EffectHandle : Handles)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[HJ] Removing 1 stack on %s (current stacks: %d)"),
+				*Unit->GetName(), Unit->AbilitySystemComponent->GetCurrentStackCount(EffectHandle));
+			
+			Unit->AbilitySystemComponent->RemoveActiveGameplayEffect(EffectHandle, 1);
+		}
+	}
 }
 
 void AChessGameMode::DisplayVirtualBoard()
