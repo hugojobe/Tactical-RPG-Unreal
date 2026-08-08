@@ -37,6 +37,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnTileClicked OnTileClicked;
 	
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Visuals")
+	void SetBlockedVisual(bool bBlocked);
+	
 protected:
 	virtual void NotifyActorOnClicked(FKey ButtonPressed = EKeys::LeftMouseButton) override;
 };

@@ -31,6 +31,24 @@ void AChessGameMode::BeginPlay()
 	}, 0.5f, false);
 }
 
+void AChessGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	TArray<AActor*> Units;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), Units);
+	for (AActor* Actor : Units)
+	{
+		if (const AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor))
+		{
+			if (AChessAIController* AIC = Cast<AChessAIController>(Unit->GetController()))
+			{
+				if (AIC->AIPlanner) AIC->AIPlanner->bAbortSearch = true;
+			}
+		}
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void AChessGameMode::GenerateVirtualBoard_Implementation()
 {
 	TMap<FIntPoint, FVirtualUnit> VUnitMap;
@@ -48,6 +66,14 @@ void AChessGameMode::GenerateVirtualBoard_Implementation()
 	}
 	
 	VirtualBoard = UChessAIPlanner::GenerateVirtualBoard(VUnitMap, GridManager->BoardWidth, GridManager->BoardHeight);
+	
+	for (const auto& BlockedPair : GridManager->BlockedTiles)
+	{
+		if (VirtualBoard.IsValidGridPos(BlockedPair.Key, VirtualBoard.Width, VirtualBoard.Height))
+		{
+			VirtualBoard.BlockedTurns[VirtualBoard.GetIndex(BlockedPair.Key)] = static_cast<uint8>(BlockedPair.Value);
+		}
+	}
 	
 	if (bDisplayVirtualBoard)
 	{
@@ -113,6 +139,8 @@ void AChessGameMode::EndPlayerTurn_Implementation()
 	SetCurrentTurn(ETurnState::Enemy);
 	GridManager->CurrentTurnActionState = ETurnState::None;
 	
+	TickAbilityCooldowns(EChessTeam::Player);
+	
 	GenerateVirtualBoard();
 	GenerateThreatMap();
 	GenerateDefenseMap();
@@ -128,7 +156,8 @@ void AChessGameMode::EndEnemyTurn_Implementation()
 	SetCurrentTurn(ETurnState::Player);
 	GridManager->CurrentTurnActionState = ETurnState::None;
 	
-	TickAbilityCooldowns(EChessTeam::Player);
+	TickAbilityCooldowns(EChessTeam::Enemy);
+	GridManager->TickBlockedTiles();
 	
 	GenerateVirtualBoard();
 	
@@ -140,8 +169,6 @@ void AChessGameMode::StartEnemyTurn_Implementation()
 {   
 	SetCurrentTurn(ETurnState::Enemy);
 	GridManager->CurrentTurnActionState = ETurnState::Enemy;
-	
-	TickAbilityCooldowns(EChessTeam::Enemy);
     
 	FTimerHandle TimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
@@ -259,8 +286,6 @@ void AChessGameMode::TickAbilityCooldowns(EChessTeam Team)
 {
 	TArray<AActor*> Units;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), Units);
-
-	UE_LOG(LogTemp, Warning, TEXT("[HJ] TickAbilityCooldowns for team %d"), static_cast<int32>(Team));
 	
 	for (AActor* Actor : Units)
 	{
@@ -271,15 +296,13 @@ void AChessGameMode::TickAbilityCooldowns(EChessTeam Team)
 		FGameplayTagContainer TickTags;
 		TickTags.AddTag(TAG_Ability_Cooldown);
 		TickTags.AddTag(TAG_Ability_Rooted);
+		TickTags.AddTag(TAG_Ability_Intimidated);
 		
 		const FGameplayEffectQuery Query = FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(TickTags);
 	
 		TArray<FActiveGameplayEffectHandle> Handles = Unit->AbilitySystemComponent->GetActiveEffects(Query);
 		for (const FActiveGameplayEffectHandle& EffectHandle : Handles)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[HJ] Removing 1 stack on %s (current stacks: %d)"),
-				*Unit->GetName(), Unit->AbilitySystemComponent->GetCurrentStackCount(EffectHandle));
-			
+		{			
 			Unit->AbilitySystemComponent->RemoveActiveGameplayEffect(EffectHandle, 1);
 		}
 	}

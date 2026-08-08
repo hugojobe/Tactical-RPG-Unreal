@@ -66,3 +66,22 @@ AChessGridManager* UChessAbilityBase::GetGridManager(const AChessUnitBase* Unit)
 {
 	return Unit ? Unit->GridManager : nullptr;
 }
+
+void UChessAbilityBase::ApplyFlatDamage(AChessUnitBase* Source, AChessUnitBase* Target, int32 Amount)
+{
+	if (!Source || !Target || !Target->AbilitySystemComponent) return;
+	
+	FGameplayEffectContextHandle Context = Source->AbilitySystemComponent->MakeEffectContext();
+	Context.AddSourceObject(Source);
+	
+	UGameplayEffect* DamageEffect = NewObject<UGameplayEffect>(GetTransientPackage(), FName("AbilityDamage"));
+	DamageEffect->DurationPolicy = EGameplayEffectDurationType::Instant;
+	
+	FGameplayModifierInfo ModifierInfo;
+	ModifierInfo.Attribute = UChessAttributeSet::GetHealthAttribute();
+	ModifierInfo.ModifierOp = EGameplayModOp::Additive;
+	ModifierInfo.ModifierMagnitude = FScalableFloat(-Amount);
+	DamageEffect->Modifiers.Add(ModifierInfo);
+	
+	Target->AbilitySystemComponent->ApplyGameplayEffectToSelf(DamageEffect, 1.0f, Context);
+}

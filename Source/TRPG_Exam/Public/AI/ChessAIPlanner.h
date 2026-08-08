@@ -58,6 +58,9 @@ struct FVirtualUnit
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 RootedTurns = 0;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    EChessAbilityType AbilityType = EChessAbilityType::None;
 };
 
 USTRUCT(BlueprintType)
@@ -70,6 +73,7 @@ public:
     int Height = 6;
     
     FVirtualUnit Grid[MAX_CHESS_BOARD_SIZE];
+    uint8 BlockedTurns[MAX_CHESS_BOARD_SIZE] = {};
 
     int32 GetIndex(const FIntPoint& Pos) const;
 
@@ -80,6 +84,7 @@ public:
     virtual bool IsValidGridPos(const FIntPoint& Pos, int BoardWidth, int BoardHeight) const;
     virtual bool IsTileOccupied(const FIntPoint& Pos) const;
     virtual EChessTeam GetTeamAt(const FIntPoint& Pos) const;
+    virtual bool IsTileBlocked(const FIntPoint& Pos) const;
 };
 
 USTRUCT(BlueprintType)

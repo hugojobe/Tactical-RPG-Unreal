@@ -66,6 +66,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid Visuals")
 	TMap<FIntPoint, AChessTileBase*> TileActors;
 	
+	UPROPERTY(BlueprintReadOnly, Category = "Abilities")
+	TMap<FIntPoint, int32> BlockedTiles;
+	
 
 // HELPER FUNCTIONS
 	UFUNCTION(BlueprintCallable, Category = "Grid Logic")
@@ -90,6 +93,15 @@ public:
 	static TMap<FIntPoint, ETileInteraction> GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, FVirtualBoard Board, bool bIncludeEmptyAttacks = false);
 
 	static bool IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase* TargetUnit);
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void BlockTile(FIntPoint Pos, int32 Turns);
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void TickBlockedTiles();
+
+	UFUNCTION(BlueprintPure, Category = "Abilities")
+	bool IsTileBlockedAt(FIntPoint Pos) const;
 	
 // GAMEPLAY
 	TArray<FTTEntry> TranspositionTable;
@@ -210,6 +222,9 @@ public:
 	void OnAbilityTargetingModeChanged(bool bEnabled);
 	
 	void ClearHighlightedTiles();
+	
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void TeleportUnitTo(AChessUnitBase* Unit, FIntPoint TargetPos);
 
 // CHESSBOARD INTERFACES
 	virtual bool IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const override;

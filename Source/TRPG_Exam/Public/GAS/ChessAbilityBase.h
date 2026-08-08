@@ -42,6 +42,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Chess Ability")
 	TSubclassOf<UGameplayEffect> CooldownEffectClass;
 	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chess Ability")
+	bool bActivatable = true;
+	
 	UFUNCTION(BlueprintCallable, Category = "Chess Ability")
 	virtual TArray<FIntPoint> GetValidTargets(const AChessUnitBase* Unit) const;
 	
@@ -56,4 +59,6 @@ protected:
 	virtual void ExecuteAbilityEffect(AChessUnitBase* Unit, FIntPoint TargetPos);
 	
 	AChessGridManager* GetGridManager(const AChessUnitBase* Unit) const;
+	
+	void ApplyFlatDamage(AChessUnitBase* Source, AChessUnitBase* Target, int32 Amount);
 };

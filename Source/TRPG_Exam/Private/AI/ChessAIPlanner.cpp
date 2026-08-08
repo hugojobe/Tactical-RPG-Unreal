@@ -50,8 +50,13 @@ uint64 FVirtualBoard::ComputeHash(const uint64 Zobrist[64][3][7], bool bIsMaximi
 			uint64 BaseKey = Zobrist[i][TeamIdx][TypeIdx];
 			
 			uint64 HPModifier = static_cast<uint64>(Grid[i].UnitStats.CurrentHP) * (i + 1) * 0x9E3779B185EBCA87ULL;
-            
+			
 			HashKey ^= (BaseKey + HPModifier);
+			
+			if (BlockedTurns[i] > 0)
+			{
+				HashKey ^= Zobrist[i][2][0];
+			}
 		}
 	}
 	
@@ -75,6 +80,12 @@ EChessTeam FVirtualBoard::GetTeamAt(const FIntPoint& Pos) const
 {
 	if (!IsValidGridPos(Pos, Width, Height)) return EChessTeam::None;
 	return Grid[GetIndex(Pos)].Team;
+}
+
+bool FVirtualBoard::IsTileBlocked(const FIntPoint& Pos) const
+{
+	if (!IsValidGridPos(Pos, Width, Height)) return false;
+	return BlockedTurns[GetIndex(Pos)] > 0;
 }
 
 FVirtualBoard UChessAIPlanner::GenerateVirtualBoard(TMap<FIntPoint, FVirtualUnit> VUnits, int Width, int Height)
@@ -192,7 +203,7 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 	if (!GridManager) return BestOverallDecision;
 	
 	FIntPoint UnitOriginalPos = FIntPoint(MyUnit->GridCoordinates.X, MyUnit->GridCoordinates.Y);
-	FVirtualUnit VUnit = AChessGridManager::MakeVirtualUnit(MyUnit);
+	FVirtualUnit VUnit = Board.Grid[Board.GetIndex(UnitOriginalPos)];
 	TMap<FIntPoint, ETileInteraction> PossibleFirstMove = GridManager->GetValidMoves(VUnit, UnitOriginalPos, GridManager->GameMode->VirtualBoard);
 	
 	SearchStartTime = FPlatformTime::Seconds();
@@ -206,16 +217,14 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 	{
 		if (FallbackDecision.Type == EChessDecisionType::Null)
 		{
-			FallbackDecision.Type = (FirstMove.Value == ETileInteraction::Move)
-				? EChessDecisionType::Move : EChessDecisionType::Attack;
+			FallbackDecision.Type = (FirstMove.Value == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
 			FallbackDecision.TargetPosition = FirstMove.Key;
 			FallbackDecision.Score = -BIG_NUMBER;
 		}
     
 		if (FirstMove.Key != MyUnit->LastPosition)
 		{
-			FallbackDecision.Type = (FirstMove.Value == ETileInteraction::Move)
-				? EChessDecisionType::Move : EChessDecisionType::Attack;
+			FallbackDecision.Type = (FirstMove.Value == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
 			FallbackDecision.TargetPosition = FirstMove.Key;
 			FallbackDecision.Score = -BIG_NUMBER;
 			break;

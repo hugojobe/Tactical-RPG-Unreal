@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ChessAbilityBase.h"
+#include "GAS/ChessAbilityBase.h"
 #include "ChessAbility_Bastion.generated.h"
 
 

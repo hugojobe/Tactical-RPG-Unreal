@@ -150,6 +150,18 @@ void AChessGridManager::ClearHighlightedTiles()
 	HighlightedTiles.Empty();
 }
 
+void AChessGridManager::TeleportUnitTo(AChessUnitBase* Unit, FIntPoint TargetPos)
+{
+	if (!Unit || !IsValidGridPos(TargetPos) || IsTileBlockedAt(TargetPos)) return;
+	
+	const FIntPoint From(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
+	ClearTile(From);
+	Unit->LastPosition = From;
+	RegisterUnitAt(TargetPos, Unit);
+	Unit->SetActorLocation(GridToWorld(TargetPos));
+	Unit->bHasMoved = true;
+}
+
 bool AChessGridManager::IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const
 {
 	return (Pos.X >= 0 && Pos.X < Width && Pos.Y >= 0 && Pos.Y < Height);
@@ -211,6 +223,38 @@ bool AChessGridManager::IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase
 {
 	if (!Unit || !TargetUnit) return false;
 	return Unit->Team != TargetUnit->Team;
+}
+
+void AChessGridManager::BlockTile(FIntPoint Pos, int32 Turns)
+{
+	if (!IsValidGridPos(Pos) || GetUnitAt(Pos)) return;
+
+	BlockedTiles.Add(Pos, Turns);
+	if (AChessTileBase* Tile = TileActors.FindRef(Pos))
+	{
+		Tile->SetBlockedVisual(true);
+	}
+}
+
+void AChessGridManager::TickBlockedTiles()
+{
+	for (auto It = BlockedTiles.CreateIterator(); It; ++It)
+	{
+		It->Value--;
+		if (It->Value <= 0)
+		{
+			if (AChessTileBase* Tile = TileActors.FindRef(It->Key))
+			{
+				Tile->SetBlockedVisual(false);
+			}
+			It.RemoveCurrent();
+		}
+	}
+}
+
+bool AChessGridManager::IsTileBlockedAt(FIntPoint Pos) const
+{
+	return BlockedTiles.Contains(Pos);
 }
 
 TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, FVirtualBoard Board, bool bIncludeEmptyAttacks)
@@ -427,7 +471,6 @@ void AChessGridManager::HandleMoveFinished_Implementation()
 	if (MovingUnit)
 	{
 		MovingUnit->SetActorLocation(MoveTargetLoc);
-		
 
 		FRotator FinalRot = MovingUnit->GetActorRotation();
         FinalRot.Pitch = 0.0f;
@@ -437,6 +480,8 @@ void AChessGridManager::HandleMoveFinished_Implementation()
 		ClearTile(FIntPoint(MovingUnit->GridCoordinates.X, MovingUnit->GridCoordinates.Y));
 		MovingUnit->GridCoordinates = FVector2D(WorldToGrid(MoveTargetLoc));
 		RegisterUnitAt(WorldToGrid(MoveTargetLoc), MovingUnit);
+		
+		MovingUnit->bHasMoved = true;
 
 		MovingUnit->OnUnitUnclickedFeedback();
 		MovingUnit = nullptr;
@@ -580,6 +625,7 @@ void AChessGridManager::HandleAttackFinished_Implementation()
 				FinalGridPos = WorldToGrid(AttackerImpactPos);
 				ClearTile(WorldToGrid(AttackStartPos));
 				RegisterUnitAt(FinalGridPos, AttackerUnit);
+				AttackerUnit->bHasMoved = true;
 			}
 			else
 			{
@@ -658,10 +704,11 @@ FVirtualUnit AChessGridManager::MakeVirtualUnit(const AChessUnitBase* Unit)
 
 	VUnit.Team = Unit->Team;
 	VUnit.UnitMovementRule = Unit->MovementRule;
-	VUnit.UnitStats = Unit->Stats;
-	
-	VUnit.UnitStats.CurrentHP = static_cast<int32>(Unit->Attributes->GetHealth());
 	VUnit.UnitType = Unit->UnitType;
+	
+	VUnit.UnitStats = Unit->Stats;
+	VUnit.UnitStats.CurrentHP = static_cast<int32>(Unit->Attributes->GetHealth());
+	VUnit.UnitStats.Damage = static_cast<int32>(Unit->Attributes->GetDamage());
 
 	if (Unit->AbilitySystemComponent)
 	{
@@ -669,6 +716,15 @@ FVirtualUnit AChessGridManager::MakeVirtualUnit(const AChessUnitBase* Unit)
 		for (const FActiveGameplayEffectHandle& EffectHandle : Unit->AbilitySystemComponent->GetActiveEffects(RootedQuery))
 		{
 			VUnit.RootedTurns = FMath::Max(VUnit.RootedTurns, Unit->AbilitySystemComponent->GetCurrentStackCount(EffectHandle));
+		}
+		
+		VUnit.bHasMoved = Unit->bHasMoved;
+		if (const FGameplayAbilitySpec* Spec = Unit->AbilitySystemComponent->FindAbilitySpecFromHandle(Unit->ActiveAbilityHandle))
+		{
+			if (const UChessAbilityBase* AbilityCDO = Cast<UChessAbilityBase>(Spec->Ability))
+			{
+				VUnit.AbilityType = AbilityCDO->AbilityType;
+			}
 		}
 	}
 
@@ -692,6 +748,7 @@ bool AChessGridManager::CanUseSelectedUnitAbility() const
 
 	UChessAbilityBase* Ability = GetSelectedUnitAbility();
 	if (!Ability) return false;
+	if (!Ability->bActivatable) return false;
 
 	if (SelectedUnit->AbilitySystemComponent->HasMatchingGameplayTag(TAG_Ability_Cooldown)) return false;
 
@@ -709,7 +766,9 @@ void AChessGridManager::OnAbilityButtonPressed()
 		bAbilityTargetingMode = false;
 		OnAbilityTargetingModeChanged(false);
 		ClearHighlightedTiles();
-		HighlightTilesForUnit(SelectedUnit);
+		const TObjectPtr<AChessUnitBase> CachedUnit = SelectedUnit;
+		SelectedUnit = nullptr;
+		HighlightTilesForUnit(CachedUnit);
 		return;
 	}
 
@@ -754,8 +813,7 @@ void AChessGridManager::ActivateSelectedUnitAbility(FIntPoint TargetPos)
 
 	if (SelectedUnit->AbilitySystemComponent->TryActivateAbility(SelectedUnit->ActiveAbilityHandle))
 	{
-		bAbilityTargetingMode = false;
-		OnAbilityTargetingModeChanged(false);
+		OnAbilityButtonPressed();
 		
 		UAbilitySystemComponent* ASC = SelectedUnit->AbilitySystemComponent;
 		UE_LOG(LogTemp, Warning, TEXT("[HJ] Post-activation: CooldownTag=%d RootedTag=%d"),
@@ -771,7 +829,7 @@ void AChessGridManager::ActivateSelectedUnitAbility(FIntPoint TargetPos)
 			UE_LOG(LogTemp, Warning, TEXT("[HJ] Turn-stack effect active, stacks: %d"), ASC->GetCurrentStackCount(EffectHandle));
 		}
 		
-		DeselectUnit();
+		//DeselectUnit();
 		GameMode->GenerateVirtualBoard();
 	}
 	else

@@ -1,7 +1,7 @@
 ﻿// By hugojobe.
 
-#include "GAS/ChessAbility_Bastion.h"
-
+#include "GAS/Abilities/ChessAbility_Bastion.h"
+#include "GAS/ChessAbilityBase.h"
 #include "Units/ChessUnitBase.h"
 
 UChessAbility_Bastion::UChessAbility_Bastion()

@@ -5,6 +5,7 @@
 #include "AI/ChessAIController.h"
 #include "Components/StaticMeshComponent.h"
 #include "Framework/ChessGameMode.h"
+#include "GAS/ChessGameplayTags.h"
 #include "Managers/ChessGridManager.h"
 
 AChessUnitBase::AChessUnitBase()
@@ -164,7 +165,7 @@ int AChessUnitBase::DealDamageTo(AChessUnitBase* Target)
 	UGameplayEffect* DamageEffect = NewObject<UGameplayEffect>(GetTransientPackage(), FName("BasicDamage"));
 	DamageEffect->DurationPolicy = EGameplayEffectDurationType::Instant;
 
-	int32 Damage = Attributes->GetDamage();
+	int32 Damage = FMath::Max(0, static_cast<int32>(Attributes->GetDamage()));
 	FGameplayModifierInfo ModifierInfo;
 	ModifierInfo.Attribute = UChessAttributeSet::GetHealthAttribute();
 	ModifierInfo.ModifierOp = EGameplayModOp::Additive;
@@ -173,6 +174,11 @@ int AChessUnitBase::DealDamageTo(AChessUnitBase* Target)
 	DamageEffect->Modifiers.Add(ModifierInfo);
 
 	Target->GetAbilitySystemComponent()->ApplyGameplayEffectToSelf(DamageEffect, 1.0f, Context);
+	
+	if (AbilitySystemComponent->HasMatchingGameplayTag(TAG_Ability_Empowered))
+	{
+		AbilitySystemComponent->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(TAG_Ability_Empowered));
+	}
 	
 	return Damage;
 }

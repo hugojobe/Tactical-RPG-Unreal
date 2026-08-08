@@ -17,11 +17,11 @@ void ChessMovementLogic::CalculateLegalMoves(
         FIntPoint Forward(StartPos.X, StartPos.Y + Dir);
         FIntPoint Backward(StartPos.X, StartPos.Y - Dir);
 
-        if (Board.IsValidGridPos(Forward, Board.Width, Board.Height) && !Board.IsTileOccupied(Forward) && !bIncludeEmptyAttacks)
+        if (Board.IsValidGridPos(Forward, Board.Width, Board.Height) && !Board.IsTileOccupied(Forward) && !bIncludeEmptyAttacks && !Board.IsTileBlocked(Forward))
         {
             OutMoves.Add({ EChessDecisionType::Move, -BIG_NUMBER, Forward });
         }
-        if (Board.IsValidGridPos(Backward, Board.Width, Board.Height) && !Board.IsTileOccupied(Backward) && !bIncludeEmptyAttacks)
+        if (Board.IsValidGridPos(Backward, Board.Width, Board.Height) && !Board.IsTileOccupied(Backward) && !bIncludeEmptyAttacks && !Board.IsTileBlocked(Backward))
         {
             OutMoves.Add({EChessDecisionType::Move, -BIG_NUMBER, Backward});
         }
@@ -37,12 +37,23 @@ void ChessMovementLogic::CalculateLegalMoves(
             {
                 bool bHasEnemy = Board.IsTileOccupied(AttackPos) && Board.GetTeamAt(AttackPos) != MyTeam;
                 
-                if (bHasEnemy || bIncludeEmptyAttacks)
+                if (bHasEnemy || bIncludeEmptyAttacks && !Board.IsTileBlocked(AttackPos))
                 {
                     OutMoves.Add({EChessDecisionType::Attack, -BIG_NUMBER, AttackPos});
                 }
             }
         }
+        
+        const FVirtualUnit& Self = Board.Grid[Board.GetIndex(StartPos)];
+        if (Self.AbilityType == EChessAbilityType::FirstCharge && !Self.bHasMoved && !bIncludeEmptyAttacks)
+        {
+            const FIntPoint TwoStep(StartPos.X, StartPos.Y + 2 * Dir);
+            if (Board.IsValidGridPos(TwoStep, Board.Width, Board.Height) && !Board.IsTileOccupied(Forward) && !Board.IsTileOccupied(TwoStep))
+            {
+                OutMoves.Add({ EChessDecisionType::Move, -BIG_NUMBER, TwoStep });
+            }
+        }
+        
         return;
     }
 
@@ -67,6 +78,8 @@ void ChessMovementLogic::CalculateLegalMoves(
             
             if (!Board.IsValidGridPos(TargetPos, Board.Width, Board.Height)) break;
 
+            if (Board.IsTileBlocked(TargetPos)) break;
+            
             if (!Board.IsTileOccupied(TargetPos))
             {
                 OutMoves.Add({ EChessDecisionType::Move, -BIG_NUMBER, TargetPos });

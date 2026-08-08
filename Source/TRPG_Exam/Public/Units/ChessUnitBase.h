@@ -101,6 +101,9 @@ public:
 	
 	UPROPERTY(BlueprintReadOnly, Category = "Skills")
 	FIntPoint PendingAbilityTarget = FIntPoint(-1, -1);
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
+	bool bHasMoved = false;
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilitySystemComponent; }
 

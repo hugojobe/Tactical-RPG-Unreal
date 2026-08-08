@@ -15,6 +15,8 @@ AChessTileBase::AChessTileBase()
 	TileMesh->SetupAttachment(RootComponent);
 }
 
+void AChessTileBase::SetBlockedVisual_Implementation(bool bBlocked) {}
+
 void AChessTileBase::NotifyActorOnClicked(FKey ButtonPressed)
 {
 	Super::NotifyActorOnClicked(ButtonPressed);
