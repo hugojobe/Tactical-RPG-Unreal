@@ -90,7 +90,7 @@ public:
 	bool IsValidGridPos(FIntPoint GridPos);
 	
 	UFUNCTION(BlueprintCallable, Category = "CombatLogic")
-	static TMap<FIntPoint, ETileInteraction> GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, FVirtualBoard Board, bool bIncludeEmptyAttacks = false);
+	static TMap<FIntPoint, ETileInteraction> GetValidMoves(const FVirtualUnit& Unit, const FIntPoint& UnitPos, const FVirtualBoard& Board, bool bIncludeEmptyAttacks = false);
 
 	static bool IsEnemy(const AChessUnitBase* Unit, const AChessUnitBase* TargetUnit);
 

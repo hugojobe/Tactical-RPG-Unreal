@@ -284,7 +284,7 @@ FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint
 	return BestOverallDecision;
 }
 
-float UChessAIPlanner::Minimax(TArray<FIntPoint> Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing)
+float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing)
 {
 	PositionsEvaluated++;
 	if (bAbortSearch) return 0.0f;
@@ -429,7 +429,7 @@ float UChessAIPlanner::Minimax(TArray<FIntPoint> Tiles, const FVirtualBoard& Boa
 	return BestScore;
 }
 
-float UChessAIPlanner::EvaluateBoard(FVirtualBoard Board, TArray<FIntPoint> Tiles)
+float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FIntPoint>& Tiles)
 {
 	bool bPlayerKingAlive = false;
 	bool bAiKingAlive = false;

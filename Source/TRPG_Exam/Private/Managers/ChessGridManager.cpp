@@ -257,7 +257,7 @@ bool AChessGridManager::IsTileBlockedAt(FIntPoint Pos) const
 	return BlockedTiles.Contains(Pos);
 }
 
-TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(FVirtualUnit Unit, FIntPoint UnitPos, FVirtualBoard Board, bool bIncludeEmptyAttacks)
+TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(const FVirtualUnit& Unit, const FIntPoint& UnitPos, const FVirtualBoard& Board, bool bIncludeEmptyAttacks)
 {
 	TMap<FIntPoint, ETileInteraction> Result;
 	

@@ -19,11 +19,11 @@ class TRPG_EXAM_API ChessMovementLogic
 {
 	public:
 		static void CalculateLegalMoves(
-			FVirtualBoard Board,
-			const FIntPoint& StartPos,
+			const FVirtualBoard& Board, 
+			const FIntPoint& StartPos, 
 			const FMovementRule& Rule,
-			EChessTeam MyTeam,
-			TArray<FChessDecision>& OutMoves,
+			EChessTeam MyTeam, 
+			TArray<FChessDecision>& OutMoves, 
 			bool bIncludeEmptyAttacks = false
 		);
 };

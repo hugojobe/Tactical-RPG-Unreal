@@ -3,11 +3,12 @@
 #include "AI/ChessAIPlanner.h"
 
 void ChessMovementLogic::CalculateLegalMoves(
-    FVirtualBoard Board,
-    const FIntPoint& StartPos,
+    const FVirtualBoard& Board, 
+    const FIntPoint& StartPos, 
     const FMovementRule& Rule,
-    EChessTeam MyTeam,
-    TArray<FChessDecision>& OutMoves,
+    EChessTeam MyTeam, 
+    TArray<FChessDecision>& 
+    OutMoves, 
     bool bIncludeEmptyAttacks)
 {
     if (Rule.MovementStyle == EMovementStyle::Pawn)

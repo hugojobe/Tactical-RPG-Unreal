@@ -119,6 +119,8 @@ public:
     double SearchStartTime = 0.0;
     double MaxSearchTime = 0.5;
     
+    FIntPoint SourcePosition = FIntPoint(-1, -1);
+    
     int32 LastCompletedDepth = 0;
     
     UFUNCTION(BlueprintCallable)
@@ -129,6 +131,6 @@ public:
     static TMap<FIntPoint, float> GenerateBalanceMap(TArray<FIntPoint> Tiles, TMap<FIntPoint, float> Threats, TMap<FIntPoint, float> Benefits);
     
     FChessDecision GetUnitDecision(int ThinkDepth, TArray<FIntPoint> Tiles, FVirtualBoard Board);
-    float Minimax(TArray<FIntPoint> Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing);
-    float EvaluateBoard(FVirtualBoard Board, TArray<FIntPoint> Tiles);
+    float Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing);
+    float EvaluateBoard(const FVirtualBoard& Board, const TArray<FIntPoint>& Tiles);
 };
