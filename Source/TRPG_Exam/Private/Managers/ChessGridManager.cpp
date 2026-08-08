@@ -39,25 +39,6 @@ void AChessGridManager::Initialize()
 	}
 }
 
-void AChessGridManager::InitializeZobrist()
-{
-	for (int sq = 0; sq < 64; ++sq) {
-		for (int team = 0; team < 3; ++team) {
-			for (int type = 0; type < 7; ++type) {
-				uint64 High = (uint64)(FMath::RandRange(0, 0x7FFFFFFF));
-				uint64 Low = (uint64)(FMath::RandRange(0, 0x7FFFFFFF));
-				ZobristTable[sq][team][type] = (High << 32) | Low;
-			}
-		}
-	}
-
-	TranspositionTable.SetNum(TT_SIZE); 
-	for (int i = 0; i < TT_SIZE; ++i) {
-		TranspositionTable[i].Key = 0;
-		TranspositionTable[i].Depth = -1;
-	}
-}
-
 void AChessGridManager::RegisterStartingUnits()
 {
 	TArray<AActor*> StartingUnits;

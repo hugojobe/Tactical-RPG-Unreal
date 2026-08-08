@@ -95,6 +95,7 @@ struct FChessDecision
     EChessDecisionType Type;
     float Score;
     FIntPoint TargetPosition;
+    FIntPoint SourcePosition;
 };
 
 struct FAvailableMove {
@@ -123,14 +124,22 @@ public:
     
     int32 LastCompletedDepth = 0;
     
-    UFUNCTION(BlueprintCallable)
+    TMap<FIntPoint, FIntPoint> UnitLastPositions;
     
+    uint64 ZobristTable[64][3][7];
+    TArray<FTTEntry> TranspositionTable;
+    
+    UFUNCTION(BlueprintCallable)
     static FVirtualBoard GenerateVirtualBoard(TMap<FIntPoint, FVirtualUnit> VUnits, int Width, int Height);
     static TMap<FIntPoint, float> GenerateThreatMap(FVirtualBoard VBoard);
     static TMap<FIntPoint, float> GenerateDefenseMap(FVirtualBoard VBoard);
     static TMap<FIntPoint, float> GenerateBalanceMap(TArray<FIntPoint> Tiles, TMap<FIntPoint, float> Threats, TMap<FIntPoint, float> Benefits);
     
+    void InitializeZobrist();
+    FChessDecision GetGlobalDecision(int ThinkDepth, const TArray<FIntPoint>& Tiles, FVirtualBoard Board);
+    
     FChessDecision GetUnitDecision(int ThinkDepth, TArray<FIntPoint> Tiles, FVirtualBoard Board);
     float Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing);
     float EvaluateBoard(const FVirtualBoard& Board, const TArray<FIntPoint>& Tiles);
+    float EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth);
 };

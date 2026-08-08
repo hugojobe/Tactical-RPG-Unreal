@@ -9,9 +9,7 @@
 #include "ChessGameMode.generated.h"
 
 class AChessGridManager;
-/**
- * 
- */
+
 UCLASS()
 class TRPG_EXAM_API AChessGameMode : public AGameModeBase
 {
@@ -41,6 +39,18 @@ public:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game State")
 	ETurnState CurrentTurn;
+	
+	UPROPERTY()
+	UChessAIPlanner* GlobalPlanner;
+	
+	UPROPERTY(EditAnywhere, Category = "AI")
+	float AbilityScoreMargin = 3.0f;
+
+	UPROPERTY(EditAnywhere, Category = "AI")
+	int32 AbilitySearchDepth = 4;
+
+	UFUNCTION(BlueprintCallable, Category = "AI")
+	void TryUseEnemyAbility();
     
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
 	void PlayerActionFinished(AChessGridManager* Manager);

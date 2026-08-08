@@ -192,6 +192,115 @@ TMap<FIntPoint, float> UChessAIPlanner::GenerateBalanceMap(TArray<FIntPoint> Til
 	return Balance;
 }
 
+void UChessAIPlanner::InitializeZobrist()
+{
+	for (int sq = 0; sq < 64; ++sq) {
+		for (int team = 0; team < 3; ++team) {
+			for (int type = 0; type < 7; ++type) {
+				uint64 High = (uint64)(FMath::RandRange(0, 0x7FFFFFFF));
+				uint64 Low = (uint64)(FMath::RandRange(0, 0x7FFFFFFF));
+				ZobristTable[sq][team][type] = (High << 32) | Low;
+			}
+		}
+	}
+
+	TranspositionTable.SetNum(TT_SIZE); 
+	for (int i = 0; i < TT_SIZE; ++i) {
+		TranspositionTable[i].Key = 0;
+		TranspositionTable[i].Depth = -1;
+	}
+}
+
+FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<FIntPoint>& Tiles, FVirtualBoard Board)
+{
+	PositionsEvaluated = 0;
+
+	FChessDecision BestOverallDecision;
+	BestOverallDecision.Type = EChessDecisionType::Null;
+	BestOverallDecision.Score = -BIG_NUMBER;
+
+	SearchStartTime = FPlatformTime::Seconds();
+	MaxSearchTime = 1;
+	bAbortSearch = false;
+	LastCompletedDepth = 0;
+	
+	struct FRootMove
+	{
+		FIntPoint From;
+		FIntPoint To;
+		FVirtualUnit Unit;
+		ETileInteraction Interaction;
+	};
+	TArray<FRootMove> RootMoves;
+	
+	for (int i = 0; i < Board.Width * Board.Height; ++i)
+	{
+		const FVirtualUnit& Unit = Board.Grid[i];
+		if (Unit.Team != EChessTeam::Enemy) continue;
+
+		const FIntPoint From(i % Board.Width, i / Board.Width);
+		TMap<FIntPoint, ETileInteraction> Moves = AChessGridManager::GetValidMoves(Unit, From, Board);
+
+		for (const TPair<FIntPoint, ETileInteraction>& MovePair : Moves)
+		{
+			if (MovePair.Value == ETileInteraction::Move && UnitLastPositions.FindRef(From) == MovePair.Key) continue;
+
+			RootMoves.Add({ From, MovePair.Key, Unit, MovePair.Value });
+		}
+	}
+	
+	if (RootMoves.Num() == 0) return BestOverallDecision;
+	
+	BestOverallDecision.Type = (RootMoves[0].Interaction == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
+	BestOverallDecision.SourcePosition = RootMoves[0].From;
+	BestOverallDecision.TargetPosition = RootMoves[0].To;
+	
+	for (int CurrentDepth = 1; CurrentDepth <= ThinkDepth; CurrentDepth++)
+	{
+		FChessDecision DepthDecision;
+		DepthDecision.Type = EChessDecisionType::Null;
+		DepthDecision.Score = -BIG_NUMBER;
+
+		float Alpha = -BIG_NUMBER;
+		float Beta = BIG_NUMBER;
+
+		for (const FRootMove& Move : RootMoves)
+		{
+			FVirtualBoard SimBoard = Board;
+			if (Move.Interaction == ETileInteraction::Move)
+				SimBoard.MoveUnit(Move.From, Move.To, Move.Unit);
+			else
+				SimBoard.AttackUnit(Move.From, Move.To, Move.Unit, Board.Grid[Board.GetIndex(Move.To)]);
+
+			const float ActionScore = Minimax(Tiles, SimBoard, CurrentDepth - 1, Alpha, Beta, false);
+
+			if (bAbortSearch) break;
+
+			if (ActionScore > DepthDecision.Score)
+			{
+				DepthDecision.Type = (Move.Interaction == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
+				DepthDecision.SourcePosition = Move.From;
+				DepthDecision.TargetPosition = Move.To;
+				DepthDecision.Score = ActionScore;
+			}
+
+			Alpha = FMath::Max(Alpha, ActionScore);
+		}
+
+		if (bAbortSearch) break;
+
+		if (DepthDecision.Type != EChessDecisionType::Null)
+		{
+			BestOverallDecision = DepthDecision;
+			LastCompletedDepth = CurrentDepth;
+		}
+
+		if (BestOverallDecision.Score > 500000.0f) break;
+	}
+
+	return BestOverallDecision;
+}
+
 FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint> Tiles, FVirtualBoard Board)
 {	
 	PositionsEvaluated = 0;
@@ -298,9 +407,9 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 		}
 	}
 	
-	uint64 CurrentHash = Board.ComputeHash(GridManager->ZobristTable, bIsMaximizing);
+	uint64 CurrentHash = Board.ComputeHash(ZobristTable, bIsMaximizing);
 	int TTIndex = CurrentHash % TT_SIZE;
-	FTTEntry& TT = GridManager->TranspositionTable[TTIndex];
+	FTTEntry& TT = TranspositionTable[TTIndex];
 	FIntPoint TTBestMove = FIntPoint(-1, -1);
 	
 	if (TT.Key == CurrentHash) 
@@ -332,7 +441,7 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 
 		FIntPoint Pos(i % Board.Width, i / Board.Width);
 
-		auto Moves = GridManager->GetValidMoves(Unit, Pos, Board);
+		auto Moves = AChessGridManager::GetValidMoves(Unit, Pos, Board);
     
 		for (auto& MovePair : Moves)
 		{
@@ -501,5 +610,14 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 	if (!bAiKingAlive && GridManager->GameMode->bEnemyKingExists) Score -= 1000000.0f;
             
 	return Score;
+}
+
+float UChessAIPlanner::EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth)
+{
+	SearchStartTime = FPlatformTime::Seconds();
+	MaxSearchTime = 0.05;
+	bAbortSearch = false;
+
+	return Minimax(Tiles, Board, Depth, -BIG_NUMBER, BIG_NUMBER, true);
 }
 

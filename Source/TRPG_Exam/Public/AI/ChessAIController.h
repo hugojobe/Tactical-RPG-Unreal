@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "AIController.h"
 #include "ChessAIPlanner.h"
-#include "UChessHTNPlanner.h"
 #include "ChessAIController.generated.h"
 
 class AChessUnitBase;
@@ -24,11 +23,6 @@ public:
 
 	UPROPERTY(VisibleAnywhere)
 	UChessAIPlanner* AIPlanner;
-	
-	//FHTNTask CurrentPlan;
-
-	//UFUNCTION(BlueprintCallable, Category = "AI")
-	//FHTNTask GetPlan();
 	
 	AChessGridManager* GridManager;
 	AChessUnitBase* MyPawn;

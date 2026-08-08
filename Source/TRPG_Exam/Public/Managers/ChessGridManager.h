@@ -39,7 +39,6 @@ public:
 	AChessGridManager();
 
 	virtual void Initialize();
-	void InitializeZobrist();
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid Config")
 	float TileSize;
@@ -103,10 +102,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Abilities")
 	bool IsTileBlockedAt(FIntPoint Pos) const;
 	
-// GAMEPLAY
-	TArray<FTTEntry> TranspositionTable;
-	uint64 ZobristTable[64][3][7];
-	
+// GAMEPLAY	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framewrok")
 	AChessGameMode* GameMode;
 	
