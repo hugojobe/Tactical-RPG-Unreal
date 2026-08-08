@@ -525,9 +525,9 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 		}
 	}
 	
-	if (!bPlayerKingAlive && GridManager->GameMode->bPlayerKingExists) Score += 1000000.0f;
-	if (!bAiKingAlive && GridManager->GameMode->bEnemyKingExists) Score -= 1000000.0f;
-            
+	if (!bPlayerKingAlive && bExpectPlayerKing) Score += 1000000.0f;
+	if (!bAiKingAlive && bExpectEnemyKing) Score -= 1000000.0f;
+	
 	return Score;
 }
 

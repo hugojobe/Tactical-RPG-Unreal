@@ -30,6 +30,7 @@ void UChessAbility_Punishment::ExecuteAbilityEffect(AChessUnitBase* Unit, FIntPo
 		
 		const bool bFatal = Target->Attributes->GetHealth() <= 0.f;
 		Grid->PlayImpactFeedback(Unit, Target, bFatal, DamageAmount);
+		OnAbilityAffectedUnitFeedback(AbilityType, Unit, Target);
 		if (bFatal)
 		{
 			Grid->ClearTile(Origin + Offset);

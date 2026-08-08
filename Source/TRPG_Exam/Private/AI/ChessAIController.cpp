@@ -20,7 +20,6 @@ void AChessAIController::OnPossess(APawn* InPawn)
  	Super::OnPossess(InPawn);
 	
 	MyPawn = Cast<AChessUnitBase>(GetPawn());
-	AIPlanner->MyUnit = MyPawn;
 	AIPlanner->GridManager = GridManager;
 	Aggressiveness = Cast<AChessUnitBase>(InPawn)->Aggressiveness;
 	SelfPreservation = Cast<AChessUnitBase>(InPawn)->SelfPreservation;

@@ -90,9 +90,15 @@ void AChessGridManager::RegisterUnitAt(FIntPoint GridPos, AChessUnitBase* Unit)
 	if (Unit->UnitType == EChessUnitType::King)
 	{
 		if (Unit->Team == EChessTeam::Player)
+		{
 			GameMode->bPlayerKingExists = true;
+			GameMode->GlobalPlanner->bExpectPlayerKing = true;
+		}
 		else if (Unit->Team == EChessTeam::Enemy)
+		{
 			GameMode->bEnemyKingExists = true;
+			GameMode->GlobalPlanner->bExpectEnemyKing = true;
+		}
 	}
 }
 

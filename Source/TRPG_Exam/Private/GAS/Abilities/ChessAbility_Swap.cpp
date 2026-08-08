@@ -49,4 +49,7 @@ void UChessAbility_Swap::ExecuteAbilityEffect(AChessUnitBase* Unit, FIntPoint Ta
 	
 	Grid->TeleportUnitTo(Other, Origin);
 	Grid->TeleportUnitTo(Unit, TargetPos);
+	
+	OnAbilityAffectedUnitFeedback(AbilityType, Unit, Other);
+	OnAbilityAffectedUnitFeedback(AbilityType, Unit, Unit);
 }

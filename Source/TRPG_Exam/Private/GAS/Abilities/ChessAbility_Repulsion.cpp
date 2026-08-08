@@ -32,5 +32,6 @@ void UChessAbility_Repulsion::ExecuteAbilityEffect(AChessUnitBase* Unit, FIntPoi
 		if (Grid->IsTileBlockedAt(Destination)) continue;
 
 		Grid->TeleportUnitTo(Pushed, Destination);
+		OnAbilityAffectedUnitFeedback(AbilityType, Unit, Pushed);
 	}
 }

@@ -19,7 +19,7 @@ TArray<FIntPoint> UChessAbility_Translation::GetValidTargets(const AChessUnitBas
 	if (!Grid) return Result;
 
 	const FIntPoint Origin(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
-	static const FIntPoint Orthogonals[] = { {1,0}, {-1,0}, {0,1}, {0,-1} };
+	const FIntPoint Orthogonals[] = { {1,0}, {-1,0}, {0,1}, {0,-1} };
 
 	for (const FIntPoint& Dir : Orthogonals)
 	{

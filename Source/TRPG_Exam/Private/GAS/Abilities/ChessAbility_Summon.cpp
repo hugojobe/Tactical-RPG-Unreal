@@ -77,5 +77,6 @@ void UChessAbility_Summon::ExecuteAbilityEffect(AChessUnitBase* Unit, FIntPoint 
 	if (AChessUnitBase* Ally = Grid->GetUnitAt(TargetPos))
 	{
 		Grid->TeleportUnitTo(Ally, BestTile);
+		OnAbilityAffectedUnitFeedback(AbilityType, Unit, Ally);
 	}
 }

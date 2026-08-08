@@ -39,7 +39,7 @@ struct FVirtualUnit
     GENERATED_BODY()
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    EChessTeam Team;
+    EChessTeam Team = EChessTeam::None;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FMovementRule UnitMovementRule;
@@ -48,7 +48,7 @@ struct FVirtualUnit
     FUnitStats UnitStats;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    EChessUnitType UnitType;
+    EChessUnitType UnitType = EChessUnitType::Pawn;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     bool bHasMoved = false;
@@ -118,6 +118,9 @@ public:
     bool bAbortSearch = false;
     double SearchStartTime = 0.0;
     double MaxSearchTime = 1;
+    
+    bool bExpectPlayerKing = true;
+    bool bExpectEnemyKing = true;
     
     FIntPoint SourcePosition = FIntPoint(-1, -1);
     

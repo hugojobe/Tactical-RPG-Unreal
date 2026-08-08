@@ -37,16 +37,16 @@ struct FUnitStats
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-	int32 MaxHP;
+	int32 MaxHP = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Stats")
-	int32 CurrentHP;
+	int32 CurrentHP = 0;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Stats")
-	int32 Damage;
+	int32 Damage = 0;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Stats")
-	int32 KillRpReward;
+	int32 KillRpReward = 0;
 };
 
 USTRUCT(BlueprintType)

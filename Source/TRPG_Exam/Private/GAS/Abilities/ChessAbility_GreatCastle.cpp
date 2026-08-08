@@ -21,9 +21,9 @@ TArray<FIntPoint> UChessAbility_GreatCastle::GetValidTargets(const AChessUnitBas
 	if (!Grid) return Result;
 	
 	const FIntPoint Origin(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
-	const FIntPoint Orthogonals[] = {{1,0}, {-1,0}, {0,1}, {0,-1}};
+	const FIntPoint OrthogonalsPos[] = {{1,0}, {-1,0}, {0,1}, {0,-1}};
 	
-	for (const FIntPoint& Dir : Orthogonals)
+	for (const FIntPoint& Dir : OrthogonalsPos)
 	{
 		FIntPoint Pos = Origin + Dir;
 		while (Grid->IsValidGridPos(Pos))

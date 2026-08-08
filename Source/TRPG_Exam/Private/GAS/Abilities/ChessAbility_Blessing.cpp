@@ -19,9 +19,9 @@ TArray<FIntPoint> UChessAbility_Blessing::GetValidTargets(const AChessUnitBase* 
 	if (!Grid) return Result;
 	
 	const FIntPoint Origin(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
-	const FIntPoint Diagonals[] = {{1,1}, {1,-1}, {-1,1}, {-1,-1}};
+	const FIntPoint DiagonalPos[] = {{1,1}, {1,-1}, {-1,1}, {-1,-1}};
 	
-	for (const FIntPoint& Dir : Diagonals)
+	for (const FIntPoint& Dir : DiagonalPos)
 	{
 		FIntPoint Pos = Origin + Dir;
 		while (Grid->IsValidGridPos(Pos))
@@ -52,5 +52,6 @@ void UChessAbility_Blessing::ExecuteAbilityEffect(AChessUnitBase* Unit, FIntPoin
 	const int32 Heal = FMath::Min(static_cast<int32>(HealAmount), MissingHealth);
 	if (Heal <= 0) return;
 	
+	OnAbilityAffectedUnitFeedback(AbilityType, Unit, Target);
 	ApplyFlatDamage(Unit, Target, -Heal);
 }

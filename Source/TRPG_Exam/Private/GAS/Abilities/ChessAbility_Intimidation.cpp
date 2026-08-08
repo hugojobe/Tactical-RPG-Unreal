@@ -30,6 +30,7 @@ void UChessAbility_Intimidation::ExecuteAbilityEffect(AChessUnitBase* Unit, FInt
 		{
 			Spec.Data->SetStackCount(DebuffTurns);
 			Target->AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+			OnAbilityAffectedUnitFeedback(AbilityType, Unit, Target);
 		}
 	}
 }

@@ -30,6 +30,9 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Chess Ability")
 	void OnAbilityActivatedFeedback(EChessAbilityType Type, AChessUnitBase* Unit, FIntPoint TargetPos);
 	
+	UFUNCTION(BlueprintImplementableEvent, Category = "Chess Ability")
+	void OnAbilityAffectedUnitFeedback(EChessAbilityType Type, AChessUnitBase* Caster, AChessUnitBase* AffectedUnit);
+	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chess Ability")
 	EChessAbilityType AbilityType = EChessAbilityType::None;
 	

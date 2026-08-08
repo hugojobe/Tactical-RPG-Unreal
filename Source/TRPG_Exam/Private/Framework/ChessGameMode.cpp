@@ -25,6 +25,9 @@ void AChessGameMode::BeginPlay()
 	GlobalPlanner->GridManager = GridManager;
 	GlobalPlanner->InitializeZobrist();
 	
+	GlobalPlanner->bExpectPlayerKing = bPlayerKingExists;
+	GlobalPlanner->bExpectEnemyKing = bEnemyKingExists;
+	
 	FTimerHandle TimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
 	{
