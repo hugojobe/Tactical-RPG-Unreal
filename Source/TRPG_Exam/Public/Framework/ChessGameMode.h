@@ -44,7 +44,7 @@ public:
 	UChessAIPlanner* GlobalPlanner;
 	
 	UPROPERTY(EditAnywhere, Category = "AI")
-	float AbilityScoreMargin = 3.0f;
+	float AbilityScoreMargin = 2.f;
 
 	UPROPERTY(EditAnywhere, Category = "AI")
 	int32 AbilitySearchDepth = 4;

@@ -49,9 +49,13 @@ uint64 FVirtualBoard::ComputeHash(const uint64 Zobrist[64][3][7], bool bIsMaximi
             
 			uint64 BaseKey = Zobrist[i][TeamIdx][TypeIdx];
 			
-			uint64 HPModifier = static_cast<uint64>(Grid[i].UnitStats.CurrentHP) * (i + 1) * 0x9E3779B185EBCA87ULL;
+			uint64 StateModifier =
+				static_cast<uint64>(Grid[i].UnitStats.CurrentHP) * 0x9E3779B185EBCA87ULL
+				+ static_cast<uint64>(Grid[i].UnitStats.Damage) * 0xC2B2AE3D27D4EB4FULL
+				+ static_cast<uint64>(Grid[i].RootedTurns) * 0x165667B19E3779F9ULL
+				+ (Grid[i].bHasMoved ? 0x27D4EB2F165667C5ULL : 0);
 			
-			HashKey ^= (BaseKey + HPModifier);
+			HashKey ^= (BaseKey + StateModifier * (i + 1));
 			
 			if (BlockedTurns[i] > 0)
 			{
@@ -230,7 +234,9 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 		FIntPoint To;
 		FVirtualUnit Unit;
 		ETileInteraction Interaction;
+		bool bIsShuffle = false;
 	};
+	
 	TArray<FRootMove> RootMoves;
 	
 	for (int i = 0; i < Board.Width * Board.Height; ++i)
@@ -243,9 +249,9 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 
 		for (const TPair<FIntPoint, ETileInteraction>& MovePair : Moves)
 		{
-			if (MovePair.Value == ETileInteraction::Move && UnitLastPositions.FindRef(From) == MovePair.Key) continue;
-
-			RootMoves.Add({ From, MovePair.Key, Unit, MovePair.Value });
+			FRootMove NewMove{ From, MovePair.Key, Unit, MovePair.Value };
+			NewMove.bIsShuffle = (MovePair.Value == ETileInteraction::Move && UnitLastPositions.FindRef(From) == MovePair.Key);
+			RootMoves.Add(NewMove);
 		}
 	}
 	
@@ -254,6 +260,10 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 	BestOverallDecision.Type = (RootMoves[0].Interaction == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
 	BestOverallDecision.SourcePosition = RootMoves[0].From;
 	BestOverallDecision.TargetPosition = RootMoves[0].To;
+	
+	RootMoves.Sort([](const FRootMove& A, const FRootMove& B) {
+		return (A.Interaction == ETileInteraction::Attack) > (B.Interaction == ETileInteraction::Attack);
+	});
 	
 	for (int CurrentDepth = 1; CurrentDepth <= ThinkDepth; CurrentDepth++)
 	{
@@ -273,18 +283,20 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 				SimBoard.AttackUnit(Move.From, Move.To, Move.Unit, Board.Grid[Board.GetIndex(Move.To)]);
 
 			const float ActionScore = Minimax(Tiles, SimBoard, CurrentDepth - 1, Alpha, Beta, false);
-
+			
+			float AdjustedScore = ActionScore - (Move.bIsShuffle ? 1.0f : 0.0f);
+			
 			if (bAbortSearch) break;
 
-			if (ActionScore > DepthDecision.Score)
+			if (AdjustedScore > DepthDecision.Score)
 			{
 				DepthDecision.Type = (Move.Interaction == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
 				DepthDecision.SourcePosition = Move.From;
 				DepthDecision.TargetPosition = Move.To;
-				DepthDecision.Score = ActionScore;
+				DepthDecision.Score = AdjustedScore;
 			}
 
-			Alpha = FMath::Max(Alpha, ActionScore);
+			Alpha = FMath::Max(Alpha, AdjustedScore);
 		}
 
 		if (bAbortSearch) break;
@@ -298,98 +310,6 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 		if (BestOverallDecision.Score > 500000.0f) break;
 	}
 
-	return BestOverallDecision;
-}
-
-FChessDecision UChessAIPlanner::GetUnitDecision(int ThinkDepth, TArray<FIntPoint> Tiles, FVirtualBoard Board)
-{	
-	PositionsEvaluated = 0;
-	
-	FChessDecision BestOverallDecision;
-	BestOverallDecision.Type = EChessDecisionType::Null;
-	BestOverallDecision.Score = -BIG_NUMBER;
-	
-	if (!GridManager) return BestOverallDecision;
-	
-	FIntPoint UnitOriginalPos = FIntPoint(MyUnit->GridCoordinates.X, MyUnit->GridCoordinates.Y);
-	FVirtualUnit VUnit = Board.Grid[Board.GetIndex(UnitOriginalPos)];
-	TMap<FIntPoint, ETileInteraction> PossibleFirstMove = GridManager->GetValidMoves(VUnit, UnitOriginalPos, GridManager->GameMode->VirtualBoard);
-	
-	SearchStartTime = FPlatformTime::Seconds();
-	MaxSearchTime = 2;
-	bAbortSearch = false;
-	LastCompletedDepth = 0;
-	
-	FChessDecision FallbackDecision;
-	FallbackDecision.Type = EChessDecisionType::Null;
-	for (TTuple<FIntPoint, ETileInteraction> FirstMove : PossibleFirstMove)
-	{
-		if (FallbackDecision.Type == EChessDecisionType::Null)
-		{
-			FallbackDecision.Type = (FirstMove.Value == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
-			FallbackDecision.TargetPosition = FirstMove.Key;
-			FallbackDecision.Score = -BIG_NUMBER;
-		}
-    
-		if (FirstMove.Key != MyUnit->LastPosition)
-		{
-			FallbackDecision.Type = (FirstMove.Value == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
-			FallbackDecision.TargetPosition = FirstMove.Key;
-			FallbackDecision.Score = -BIG_NUMBER;
-			break;
-		}
-	}
-	
-	for (int CurrentDepth = 1; CurrentDepth <= ThinkDepth; CurrentDepth++)
-	{
-		FChessDecision DepthDecision;
-		DepthDecision.Type = EChessDecisionType::Null;
-		DepthDecision.Score = -BIG_NUMBER;
-		
-		float Alpha = -BIG_NUMBER;
-		float Beta = BIG_NUMBER;
-
-		for (TTuple<FIntPoint, ETileInteraction> FirstMove : PossibleFirstMove)
-		{			
-			FVirtualBoard SimBoard = Board;
-			switch (FirstMove.Value)
-			{
-			default: break;
-			case ETileInteraction::Move:
-				if (FirstMove.Key == MyUnit->LastPosition) continue;
-				SimBoard.MoveUnit(UnitOriginalPos, FirstMove.Key, VUnit);
-				break;
-			case ETileInteraction::Attack:
-				SimBoard.AttackUnit(UnitOriginalPos, FirstMove.Key, VUnit, Board.Grid[Board.GetIndex(FirstMove.Key)]);				
-				break;
-			}
-			
-			float ActionScore = Minimax(Tiles, SimBoard, CurrentDepth - 1, Alpha, Beta, false);
-			
-			if (bAbortSearch) break;
-			
-			if (ActionScore > DepthDecision.Score)
-			{
-				DepthDecision.Score = ActionScore;
-				DepthDecision.Type = (FirstMove.Value == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
-				DepthDecision.TargetPosition = FirstMove.Key;
-			}
-			
-			Alpha = FMath::Max(Alpha, DepthDecision.Score);
-		}
-		
-		if (bAbortSearch) break;
-
-		LastCompletedDepth = CurrentDepth;
-		BestOverallDecision = DepthDecision;
-		if (BestOverallDecision.Score > 500000.0f) break;
-	}
-	
-	if (BestOverallDecision.Type == EChessDecisionType::Null)
-	{
-		return FallbackDecision;
-	}
-	
 	return BestOverallDecision;
 }
 
@@ -468,7 +388,7 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 	
 	if (AllMoves.Num() == 0)
 	{
-		return bIsMaximizing ? -999999.0f : 999999.0f;
+		return bIsMaximizing ? -(999999.0f + Depth) : (999999.0f + Depth);
 	}
 	
 	float BestScore = bIsMaximizing ? -BIG_NUMBER : BIG_NUMBER;
@@ -561,8 +481,7 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 
 		if (Unit.UnitMovementRule.MovementStyle == EMovementStyle::Pawn)
 		{
-			float Advancement = (Unit.Team == EChessTeam::Enemy) ? Y : (Board.Height - 1 - Y);
-			PositionalBonus = Advancement * (MaxBonus / Board.Height);
+			float Advancement = (Unit.Team == EChessTeam::Enemy) ? (Board.Height - 1 - Y) : Y;			PositionalBonus = Advancement * (MaxBonus / Board.Height);
 		}
 		else if (Unit.UnitType != EChessUnitType::King)
 		{
@@ -615,7 +534,7 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 float UChessAIPlanner::EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth)
 {
 	SearchStartTime = FPlatformTime::Seconds();
-	MaxSearchTime = 0.05;
+	MaxSearchTime = 0.2;
 	bAbortSearch = false;
 
 	return Minimax(Tiles, Board, Depth, -BIG_NUMBER, BIG_NUMBER, true);

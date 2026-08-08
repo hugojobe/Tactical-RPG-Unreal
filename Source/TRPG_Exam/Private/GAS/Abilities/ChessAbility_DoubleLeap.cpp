@@ -15,7 +15,7 @@ UChessAbility_DoubleLeap::UChessAbility_DoubleLeap()
 TArray<FIntPoint> UChessAbility_DoubleLeap::GetValidTargets(const AChessUnitBase* Unit) const
 {
 	AChessGridManager* Grid = GetGridManager(Unit);
-	static const FIntPoint KnightOffsets[] = { {1,2}, {2,1}, {2,-1}, {1,-2}, {-1,-2}, {-2,-1}, {-2,1}, {-1,2} };
+	const FIntPoint KnightOffsets[] = { {1,2}, {2,1}, {2,-1}, {1,-2}, {-1,-2}, {-2,-1}, {-2,1}, {-1,2} };
 	const FIntPoint Origin(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
 	
 	TArray<FIntPoint> Result;

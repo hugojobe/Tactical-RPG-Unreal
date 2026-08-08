@@ -9,9 +9,6 @@
 
 class AChessUnitBase;
 
-/**
- * 
- */
 
 UCLASS()
 class TRPG_EXAM_API AChessAIController : public AAIController

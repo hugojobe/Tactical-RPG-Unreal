@@ -143,6 +143,21 @@ void AChessGridManager::TeleportUnitTo(AChessUnitBase* Unit, FIntPoint TargetPos
 	Unit->bHasMoved = true;
 }
 
+int32 AChessGridManager::GetSelectedUnitAbilityCooldown() const
+{
+	if (!SelectedUnit || !SelectedUnit->AbilitySystemComponent) return 0;
+
+	int32 Cooldown = 0;
+
+	const FGameplayEffectQuery Query = FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(FGameplayTagContainer(TAG_Ability_Cooldown));
+	for (const FActiveGameplayEffectHandle& EffectHandle : SelectedUnit->AbilitySystemComponent->GetActiveEffects(Query))
+	{
+		Cooldown = FMath::Max(Cooldown, SelectedUnit->AbilitySystemComponent->GetCurrentStackCount(EffectHandle));
+	}
+
+	return Cooldown;
+}
+
 bool AChessGridManager::IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const
 {
 	return (Pos.X >= 0 && Pos.X < Width && Pos.Y >= 0 && Pos.Y < Height);

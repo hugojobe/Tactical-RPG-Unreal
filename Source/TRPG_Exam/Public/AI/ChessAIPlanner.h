@@ -112,13 +112,12 @@ class UChessAIPlanner : public UObject
     GENERATED_BODY()
     
 public:
-    AChessUnitBase* MyUnit;
     AChessGridManager* GridManager;
     
     int32 PositionsEvaluated = 0;
     bool bAbortSearch = false;
     double SearchStartTime = 0.0;
-    double MaxSearchTime = 0.5;
+    double MaxSearchTime = 1;
     
     FIntPoint SourcePosition = FIntPoint(-1, -1);
     
@@ -138,7 +137,6 @@ public:
     void InitializeZobrist();
     FChessDecision GetGlobalDecision(int ThinkDepth, const TArray<FIntPoint>& Tiles, FVirtualBoard Board);
     
-    FChessDecision GetUnitDecision(int ThinkDepth, TArray<FIntPoint> Tiles, FVirtualBoard Board);
     float Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing);
     float EvaluateBoard(const FVirtualBoard& Board, const TArray<FIntPoint>& Tiles);
     float EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth);

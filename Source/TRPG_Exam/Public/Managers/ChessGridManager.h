@@ -221,6 +221,9 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void TeleportUnitTo(AChessUnitBase* Unit, FIntPoint TargetPos);
+	
+	UFUNCTION(BlueprintPure, Category = "Abilities")
+	int32 GetSelectedUnitAbilityCooldown() const;
 
 // CHESSBOARD INTERFACES
 	virtual bool IsValidGridPos(const FIntPoint& Pos, int Width, int Height) const override;

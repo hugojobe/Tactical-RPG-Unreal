@@ -19,7 +19,7 @@ TArray<FIntPoint> UChessAbility_Blessing::GetValidTargets(const AChessUnitBase* 
 	if (!Grid) return Result;
 	
 	const FIntPoint Origin(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
-	static const FIntPoint Diagonals[] = {{1,1}, {1,-1}, {-1,1}, {-1,-1}};
+	const FIntPoint Diagonals[] = {{1,1}, {1,-1}, {-1,1}, {-1,-1}};
 	
 	for (const FIntPoint& Dir : Diagonals)
 	{
