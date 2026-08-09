@@ -119,8 +119,10 @@ public:
     double SearchStartTime = 0.0;
     double MaxSearchTime = 1;
     
-    float ActivityBonusWeight = 0.75f;
-    int32 ActivityBonusCap = 4;
+    float ActivityBonusWeight = 0.01f;
+    int32 ActivityBonusCap = 1;
+    
+    float RootNoiseAmplitude = 0.025f;
     
     bool bExpectPlayerKing = true;
     bool bExpectEnemyKing = true;

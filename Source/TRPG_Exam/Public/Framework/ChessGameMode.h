@@ -47,7 +47,7 @@ public:
 	float AbilityScoreMargin = 2.f;
 
 	UPROPERTY(EditAnywhere, Category = "AI")
-	int32 AbilitySearchDepth = 4;
+	int32 AbilitySearchDepth = 5;
 
 	UFUNCTION(BlueprintCallable, Category = "AI")
 	void TryUseEnemyAbility();

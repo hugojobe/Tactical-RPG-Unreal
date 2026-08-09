@@ -255,6 +255,13 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 		}
 	}
 	
+	TArray<float> RootNoise;
+	RootNoise.Reserve(RootMoves.Num());
+	for (int32 i = 0; i < RootMoves.Num(); i++)
+	{
+		RootNoise.Add(FMath::FRandRange(0.f, RootNoiseAmplitude));
+	}
+	
 	if (RootMoves.Num() == 0) return BestOverallDecision;
 	
 	BestOverallDecision.Type = (RootMoves[0].Interaction == ETileInteraction::Move) ? EChessDecisionType::Move : EChessDecisionType::Attack;
@@ -274,8 +281,10 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 		float Alpha = -BIG_NUMBER;
 		float Beta = BIG_NUMBER;
 
-		for (const FRootMove& Move : RootMoves)
+		for (int32 MoveIndex = 0; MoveIndex < RootMoves.Num(); MoveIndex++)
 		{
+			const FRootMove& Move = RootMoves[MoveIndex];
+
 			FVirtualBoard SimBoard = Board;
 			if (Move.Interaction == ETileInteraction::Move)
 				SimBoard.MoveUnit(Move.From, Move.To, Move.Unit);
@@ -283,11 +292,16 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 				SimBoard.AttackUnit(Move.From, Move.To, Move.Unit, Board.Grid[Board.GetIndex(Move.To)]);
 
 			const int32 IdleTurns = FMath::Min(UnitIdleTurns.FindRef(Move.From), ActivityBonusCap);
-			
+
 			const float ActionScore = Minimax(Tiles, SimBoard, CurrentDepth - 1, Alpha, Beta, false);
-			float AdjustedScore = ActionScore + IdleTurns * ActivityBonusWeight - (Move.bIsShuffle ? 1.0f : 0.0f);
-			
+
 			if (bAbortSearch) break;
+
+			const float AdjustedScore =
+			   ActionScore
+			   + IdleTurns * ActivityBonusWeight
+			   + RootNoise[MoveIndex]
+			   - (Move.bIsShuffle ? 1.0f : 0.0f);
 
 			if (AdjustedScore > DepthDecision.Score)
 			{
@@ -297,7 +311,7 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 				DepthDecision.Score = AdjustedScore;
 			}
 
-			Alpha = FMath::Max(Alpha, AdjustedScore);
+			Alpha = FMath::Max(Alpha, ActionScore);
 		}
 
 		if (bAbortSearch) break;
@@ -486,19 +500,20 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 		}
 		else if (Unit.UnitType != EChessUnitType::King)
 		{
-			bool bIsBackRank = (Unit.Team == EChessTeam::Enemy) ? (Y == 0) : (Y == Board.Height - 1);
-        
-			if (bIsBackRank && (Unit.UnitType == EChessUnitType::Knight || Unit.UnitType == EChessUnitType::Bishop))
+			const float CenterX = (Board.Width - 1) / 2.0f;
+			const float CenterY = (Board.Height - 1) / 2.0f;
+			const float MaxDist = CenterX + CenterY;
+			const float DistToCenter = FMath::Abs(X - CenterX) + FMath::Abs(Y - CenterY);
+			PositionalBonus = (MaxDist - DistToCenter) * (MaxBonus / MaxDist);
+
+			const int32 HomeDepth = (Unit.Team == EChessTeam::Enemy) ? (Y - (Board.Height - 2)) : (1 - Y);
+			if (HomeDepth == 0)
 			{
-				PositionalBonus = -MaxBonus * 1.5f;
+				PositionalBonus -= MaxBonus * 0.75f;
 			}
-			else
+			else if (HomeDepth >= 1)
 			{
-				float CenterX = Board.Width / 2.0f;
-				float CenterY = Board.Height / 2.0f;
-				float DistToCenter = FMath::Abs(X - CenterX) + FMath::Abs(Y - CenterY);
-            
-				PositionalBonus = (6.0f - DistToCenter) * (MaxBonus / 6.0f);
+				PositionalBonus -= MaxBonus * 1.5f;
 			}
 		}
 		
@@ -535,7 +550,7 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 float UChessAIPlanner::EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth)
 {
 	SearchStartTime = FPlatformTime::Seconds();
-	MaxSearchTime = 0.2;
+	MaxSearchTime = 0.25f;
 	bAbortSearch = false;
 
 	return Minimax(Tiles, Board, Depth, -BIG_NUMBER, BIG_NUMBER, true);
