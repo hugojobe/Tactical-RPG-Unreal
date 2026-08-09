@@ -56,6 +56,7 @@ void AChessLevelDesigner::GenerateLevelsBlocking()
 void AChessLevelDesigner::StartGeneration()
 {
 	if (!UnitStatsTable) return;
+	bSingleLevelMode = false;
 
 	if (!Planner)
 	{
@@ -71,6 +72,30 @@ void AChessLevelDesigner::StartGeneration()
 
 	CurrentLevel = 1;
 	CandidateIndex = 0;
+	bRunning = true;
+}
+
+void AChessLevelDesigner::StartSingleLevelGeneration(int32 LevelIndex)
+{
+	if (!UnitStatsTable || !LevelRules.IsValidIndex(LevelIndex - 1)) return;
+
+	if (!Planner)
+	{
+		Planner = NewObject<UChessAIPlanner>(this, TEXT("DesignerPlanner"));
+	}
+	Planner->InitializeZobrist();
+
+	if (BestPerLevel.Num() != LevelRules.Num())
+	{
+		BestPerLevel.SetNum(LevelRules.Num());
+	}
+	BestPerLevel[LevelIndex - 1] = FLevelCandidate();
+
+	RNG.Initialize(Seed + LevelIndex * 1000 + RegenCounter++);
+
+	CurrentLevel = LevelIndex;
+	CandidateIndex = 0;
+	bSingleLevelMode = true;
 	bRunning = true;
 }
 
@@ -113,15 +138,25 @@ void AChessLevelDesigner::StepGeneration(int32 PlayoutsPerStep)
 		if (++CandidateIndex >= CandidatesPerLevel)
 		{
 			CandidateIndex = 0;
-			if (++CurrentLevel > 10) bRunning = false;
+			if (bSingleLevelMode || ++CurrentLevel > LevelRules.Num())
+			{
+				bRunning = false;
+				bSingleLevelMode = false;
+			}
 		}
 	}
 }
 
 float AChessLevelDesigner::GetProgress() const
-{
+{	
+	if (bSingleLevelMode)
+	{
+		return CandidatesPerLevel > 0 ? static_cast<float>(CandidateIndex) / CandidatesPerLevel : 0.f;
+	}
+	
 	const int32 Total = CandidatesPerLevel * 10;
 	const int32 Done = (CurrentLevel - 1) * CandidatesPerLevel + CandidateIndex;
+	
 	return Total > 0 ? static_cast<float>(Done) / Total : 0.f;
 }
 
@@ -147,6 +182,7 @@ FVirtualUnit AChessLevelDesigner::MakeUnit(EChessUnitType Type, EChessTeam Team)
 FVirtualBoard AChessLevelDesigner::BuildRandomSetup(FRandomStream& Rng, int32 LevelIndex) const
 {
 	FVirtualBoard Board;
+	
 	if (!LevelRules.IsValidIndex(LevelIndex - 1)) return Board;
 	const FLevelGenerationRule& Rule = LevelRules[LevelIndex - 1];
 

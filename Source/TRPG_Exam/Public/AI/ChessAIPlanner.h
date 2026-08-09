@@ -119,6 +119,9 @@ public:
     double SearchStartTime = 0.0;
     double MaxSearchTime = 1;
     
+    float ActivityBonusWeight = 0.75f;
+    int32 ActivityBonusCap = 4;
+    
     bool bExpectPlayerKing = true;
     bool bExpectEnemyKing = true;
     
@@ -127,9 +130,11 @@ public:
     int32 LastCompletedDepth = 0;
     
     TMap<FIntPoint, FIntPoint> UnitLastPositions;
+    TMap<FIntPoint, int32> UnitIdleTurns;
     
     uint64 ZobristTable[64][3][7];
     TArray<FTTEntry> TranspositionTable;
+    
     
     UFUNCTION(BlueprintCallable)
     static FVirtualBoard GenerateVirtualBoard(TMap<FIntPoint, FVirtualUnit> VUnits, int Width, int Height);

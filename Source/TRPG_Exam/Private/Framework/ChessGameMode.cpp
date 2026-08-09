@@ -19,11 +19,12 @@ void AChessGameMode::BeginPlay()
 	
 	GridManager = Cast<AChessGridManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AChessGridManager::StaticClass()));
 	GridManager->GameMode = this;
-	GridManager->Initialize();
 	
 	GlobalPlanner = NewObject<UChessAIPlanner>(this, TEXT("GlobalPlanner"));
 	GlobalPlanner->GridManager = GridManager;
 	GlobalPlanner->InitializeZobrist();
+	
+	GridManager->Initialize();
 	
 	GlobalPlanner->bExpectPlayerKing = bPlayerKingExists;
 	GlobalPlanner->bExpectEnemyKing = bEnemyKingExists;
@@ -187,12 +188,15 @@ void AChessGameMode::StartEnemyTurn_Implementation()
 		UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), ActorList);
 
 		GlobalPlanner->UnitLastPositions.Empty();
+		GlobalPlanner->UnitIdleTurns.Empty();
 		for (AActor* Actor : ActorList)
 		{
 			AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor);
 			if (Unit && Unit->Attributes->GetHealth() > 0 && Unit->Team == EChessTeam::Enemy)
 			{
 				GlobalPlanner->UnitLastPositions.Add(FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), Unit->LastPosition);
+				GlobalPlanner->UnitIdleTurns.Add(FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), Unit->TurnsSinceLastAction);
+				Unit->TurnsSinceLastAction++;
 			}
 		}
 

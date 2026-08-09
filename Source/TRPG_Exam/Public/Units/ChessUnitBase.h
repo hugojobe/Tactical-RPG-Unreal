@@ -83,7 +83,7 @@ public:
 	float Aggressiveness = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI Personality")
-	float SelfPreservation = 1.0f; // High means high ELO
+	float SelfPreservation = 1.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
 	UAbilitySystemComponent* AbilitySystemComponent;
@@ -104,6 +104,9 @@ public:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
 	bool bHasMoved = false;
+	
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "AI Personality")
+	int32 TurnsSinceLastAction = 0;
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilitySystemComponent; }
 

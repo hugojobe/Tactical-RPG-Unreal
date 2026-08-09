@@ -96,6 +96,7 @@ public:
 	TArray<FLevelGenerationRule> LevelRules;
 
 	UFUNCTION(BlueprintCallable, Category = "Design") void StartGeneration();
+	UFUNCTION(BlueprintCallable, Category = "Design") void StartSingleLevelGeneration(int32 LevelIndex);
 	UFUNCTION(BlueprintCallable, Category = "Design") void CancelGeneration();
 	UFUNCTION(BlueprintCallable, Category = "Design") void StepGeneration(int32 PlayoutsPerStep);
 	UFUNCTION(BlueprintPure, Category = "Design") bool IsRunning() const { return bRunning; }
@@ -104,9 +105,11 @@ public:
 private:
 	UPROPERTY(Transient)
 	UChessAIPlanner* Planner;
-	
 	bool bRunning = false;
+	
 	FRandomStream RNG;
+	bool bSingleLevelMode = false;
+	int32 RegenCounter = 0;
 
 	FVirtualUnit MakeUnit(EChessUnitType Type, EChessTeam Team) const;
 	FVirtualBoard BuildRandomSetup(FRandomStream& RNG, int32 LevelIndex) const;

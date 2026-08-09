@@ -282,9 +282,10 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 			else
 				SimBoard.AttackUnit(Move.From, Move.To, Move.Unit, Board.Grid[Board.GetIndex(Move.To)]);
 
-			const float ActionScore = Minimax(Tiles, SimBoard, CurrentDepth - 1, Alpha, Beta, false);
+			const int32 IdleTurns = FMath::Min(UnitIdleTurns.FindRef(Move.From), ActivityBonusCap);
 			
-			float AdjustedScore = ActionScore - (Move.bIsShuffle ? 1.0f : 0.0f);
+			const float ActionScore = Minimax(Tiles, SimBoard, CurrentDepth - 1, Alpha, Beta, false);
+			float AdjustedScore = ActionScore + IdleTurns * ActivityBonusWeight - (Move.bIsShuffle ? 1.0f : 0.0f);
 			
 			if (bAbortSearch) break;
 

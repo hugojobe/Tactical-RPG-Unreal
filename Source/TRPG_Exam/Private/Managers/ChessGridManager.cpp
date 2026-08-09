@@ -484,6 +484,7 @@ void AChessGridManager::HandleMoveFinished_Implementation()
 		RegisterUnitAt(WorldToGrid(MoveTargetLoc), MovingUnit);
 		
 		MovingUnit->bHasMoved = true;
+		MovingUnit->TurnsSinceLastAction = 0;
 
 		MovingUnit->OnUnitUnclickedFeedback();
 		MovingUnit = nullptr;
@@ -637,10 +638,11 @@ void AChessGridManager::HandleAttackFinished_Implementation()
 
 			AttackerUnit->UnitMeshComponent->SetRelativeRotation(FRotator::ZeroRotator);
 			AttackerUnit->OnUnitUnclickedFeedback();
+			AttackerUnit->TurnsSinceLastAction = 0;
 			SelectedUnit = nullptr;
 			IsUnitClicked = false;
-			HighlightTilesForUnit(nullptr);
 				
+			HighlightTilesForUnit(nullptr);
 			PlayerActionFinished();
 				
 			break;
