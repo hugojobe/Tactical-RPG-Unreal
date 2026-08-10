@@ -19,9 +19,9 @@ TArray<FIntPoint> UChessAbility_Translation::GetValidTargets(const AChessUnitBas
 	if (!Grid) return Result;
 
 	const FIntPoint Origin(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
-	const FIntPoint Orthogonals[] = { {1,0}, {-1,0}, {0,1}, {0,-1} };
+	const FIntPoint Ortho[] = { {1,0}, {-1,0}, {0,1}, {0,-1} };
 
-	for (const FIntPoint& Dir : Orthogonals)
+	for (const FIntPoint& Dir : Ortho)
 	{
 		const FIntPoint Pos = Origin + Dir;
 		if (Grid->IsValidGridPos(Pos) && !Grid->GetUnitAt(Pos) && !Grid->IsTileBlockedAt(Pos))

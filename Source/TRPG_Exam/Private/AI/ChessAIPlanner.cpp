@@ -111,6 +111,18 @@ float UChessAIPlanner::Quiescence(const TArray<FIntPoint>& Tiles, const FVirtual
 	if (bAbortSearch) return 0.0f;
 
 	PositionsEvaluated++;
+	
+	if (MaxSearchNodes > 0 && PositionsEvaluated >= MaxSearchNodes)
+	{
+		bAbortSearch = true;
+		return 0.0f;
+	}
+	if (PositionsEvaluated % 1000 == 0 && FPlatformTime::Seconds() - SearchStartTime > MaxSearchTime)
+	{
+		bAbortSearch = true;
+		return 0.0f;
+	}
+	
 	if (PositionsEvaluated % 1000 == 0 && FPlatformTime::Seconds() - SearchStartTime > MaxSearchTime)
 	{
 		bAbortSearch = true;
@@ -397,7 +409,7 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 
 			const float AdjustedScore =
 			   ActionScore
-			   + IdleTurns * ActivityBonusWeight
+			   + IdleTurns * Weights.ActivityBonusWeight
 			   + RootNoise[MoveIndex]
 			   - (Move.bIsShuffle ? 1.0f : 0.0f);
 
@@ -429,6 +441,18 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing)
 {
 	PositionsEvaluated++;
+	
+	if (MaxSearchNodes > 0 && PositionsEvaluated >= MaxSearchNodes)
+	{
+		bAbortSearch = true;
+		return 0.0f;
+	}
+	if (PositionsEvaluated % 1000 == 0 && FPlatformTime::Seconds() - SearchStartTime > MaxSearchTime)
+	{
+		bAbortSearch = true;
+		return 0.0f;
+	}
+	
 	if (bAbortSearch) return 0.0f;
 	
 	if (PositionsEvaluated % 1000 == 0)
@@ -701,7 +725,7 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 			
 			if (Unit.UnitType != EChessUnitType::King && Unit.UnitType != EChessUnitType::Emperor)
 			{
-				AlliedMaterial[TeamIdx] += Unit.UnitStats.KillRpReward * 10.0f + Unit.UnitStats.CurrentHP * 2.0f;
+				AlliedMaterial[TeamIdx] += Unit.UnitStats.KillRpReward * Weights.MaterialWeight + Unit.UnitStats.CurrentHP * Weights.HPWeight;
 			}
 
 			EvalScratchMoves.Reset();
@@ -729,13 +753,13 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 		const FVirtualUnit& Unit = Board.Grid[i];
 		if (Unit.Team == EChessTeam::None) continue;
 
-		float PieceValueScore = Unit.UnitStats.KillRpReward * 10.0f;
-		float HPScore = Unit.UnitStats.CurrentHP * 6.0f;
-		float DMGScore = Unit.UnitStats.Damage * 8.0f;
+		float PieceValueScore = Unit.UnitStats.KillRpReward * Weights.MaterialWeight;
+		float HPScore = Unit.UnitStats.CurrentHP * Weights.HPWeight;
+		float DMGScore = Unit.UnitStats.Damage * Weights.DamageWeight;
 		float UnitPower = PieceValueScore + HPScore + DMGScore;
 
 		float PositionalBonus = 0.0f;
-		const float MaxBonus = 3.0f;
+		const float MaxBonus = Weights.PositionalScale;
 
 		int32 X = i % Board.Width;
 		int32 Y = i / Board.Width;
@@ -756,11 +780,11 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 			const int32 HomeDepth = (Unit.Team == EChessTeam::Enemy) ? (Y - (Board.Height - 2)) : (1 - Y);
 			if (HomeDepth == 0)
 			{
-				PositionalBonus -= MaxBonus * 0.75f;
+				PositionalBonus -= MaxBonus * Weights.DevelopmentPenalty * 0.5f;
 			}
 			else if (HomeDepth >= 1)
 			{
-				PositionalBonus -= MaxBonus * 1.5f;
+				PositionalBonus -= MaxBonus * Weights.DevelopmentPenalty;
 			}
 		}
 		
@@ -777,7 +801,7 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 
 			if (bEnableStrategicEval)
 			{
-				float Danger = Coverage[FoeIdx][i] * KingThreatWeight;
+				float Danger = Coverage[FoeIdx][i] * Weights.KingThreatWeight;
 				if (Coverage[OwnIdx][i] > 0) Danger *= 0.5f;
 
 				const float SafetyScale = (Unit.UnitType == EChessUnitType::Emperor) ? 0.0f : KingSafetyScale[OwnIdx];
@@ -789,7 +813,7 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 					{
 						if (Entry.Value == Unit.Team || Entry.Value == EChessTeam::None) continue;
 						const int32 Dist = FMath::Max(FMath::Abs(Entry.Key.X - X), FMath::Abs(Entry.Key.Y - Y));
-						if (Dist <= 2) FinalUnitScore += (3 - Dist) * EmperorAggression;
+						if (Dist <= 2) FinalUnitScore += (3 - Dist) * Weights.EmperorAggression;
 					}
 				}
 			}
@@ -801,14 +825,14 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 		
 		if (bEnableStrategicEval && Coverage[OwnIdx][i] == 0 && Coverage[FoeIdx][i] > 0)
 		{
-			FinalUnitScore -= UnitPower * HangingPenalty;
+			FinalUnitScore -= UnitPower * Weights.HangingPenalty;
 		}
 
 		if (Unit.Team == EChessTeam::Player) Score -= FinalUnitScore;
 		else Score += FinalUnitScore;
 	}
 	
-	if (bEnableStrategicEval) Score += (Reach[1] - Reach[0]) * ReachWeight;
+	if (bEnableStrategicEval) Score += (Reach[1] - Reach[0]) * Weights.ReachWeight;
 
 	if (!bPlayerKingAlive && bExpectPlayerKing) Score += 1000000.0f;
 	if (!bAiKingAlive && bExpectEnemyKing) Score -= 1000000.0f;
@@ -823,5 +847,19 @@ float UChessAIPlanner::EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, cons
 	bAbortSearch = false;
 
 	return Minimax(Tiles, Board, Depth, -BIG_NUMBER, BIG_NUMBER, true);
+}
+
+void UChessAIPlanner::SaveWeights(const FString& FileName) const
+{
+	FString Json;
+	FJsonObjectConverter::UStructToJsonObjectString(Weights, Json);
+	FFileHelper::SaveStringToFile(Json, *(FPaths::ProjectSavedDir() / FileName));
+}
+
+bool UChessAIPlanner::LoadWeights(const FString& FileName)
+{
+	FString Json;
+	if (!FFileHelper::LoadFileToString(Json, *(FPaths::ProjectSavedDir() / FileName))) return false;
+	return FJsonObjectConverter::JsonObjectStringToUStruct(Json, &Weights, 0, 0);
 }
 

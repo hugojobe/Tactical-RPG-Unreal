@@ -18,6 +18,8 @@ public class TRPG_Exam : ModuleRules
 			"GameplayTags", 
 			"GameplayTasks",
 			"AIModule",
+			"Json",
+			"JsonUtilities"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

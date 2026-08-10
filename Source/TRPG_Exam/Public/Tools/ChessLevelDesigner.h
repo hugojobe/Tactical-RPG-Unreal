@@ -65,10 +65,21 @@ struct FLevelGenerationRule
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bIncludeRoyal = true;
 };
 
+USTRUCT()
+struct FTuningPosition
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere) TArray<FString> Rows;
+	UPROPERTY(EditAnywhere) bool bHasRoyals = true;
+};
+
 UCLASS()
 class TRPG_EXAM_API AChessLevelDesigner : public AActor
 {
 	GENERATED_BODY()
+	
+	AChessLevelDesigner();
 
 public:
 	UPROPERTY(EditAnywhere, Category = "Design")
@@ -110,21 +121,37 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Design") void StepGeneration(int32 PlayoutsPerStep);
 	UFUNCTION(BlueprintPure, Category = "Design") bool IsRunning() const { return bRunning; }
 	UFUNCTION(BlueprintPure, Category = "Design") float GetProgress() const;
+	
+	UPROPERTY(EditAnywhere, Category = "Tuning") TArray<FTuningPosition> TuningPositions;
+	UPROPERTY(EditAnywhere, Category = "Tuning") int32 TuningNodeBudget = 50000;
+	UPROPERTY(EditAnywhere, Category = "Tuning") int32 TuningIterations = 50;
+	UPROPERTY(EditAnywhere, Category = "Tuning") float AcceptThreshold = 0.57f;
+
+	UFUNCTION(CallInEditor, Category = "Tuning") void RunTuning();
 
 private:
-	UPROPERTY(Transient)
-	UChessAIPlanner* Planner;
+	UPROPERTY(Transient) UChessAIPlanner* PlannerA;
+	UPROPERTY(Transient) UChessAIPlanner* PlannerB;
 	bool bRunning = false;
 	
 	FRandomStream RNG;
 	bool bSingleLevelMode = false;
 	int32 RegenCounter = 0;
+	
+	UPROPERTY(EditAnywhere, Category = "Design")
+	int32 NoContactCutoff = 10;
 
+	void EnsurePlanners();
 	FVirtualUnit MakeUnit(EChessUnitType Type, EChessTeam Team) const;
 	FVirtualBoard BuildRandomSetup(FRandomStream& RNG, int32 LevelIndex) const;
 	FPlayoutResult Playout(FVirtualBoard Board);
-	bool FindBestMove(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, EChessTeam Team, FIntPoint& OutFrom, FIntPoint& OutTo, ETileInteraction& OutInteraction);
-	float ScoreCandidate(const FPlayoutResult& Result) const;
+	FPlayoutResult PlayoutVersus(FVirtualBoard Board, UChessAIPlanner* EnemyBrain, UChessAIPlanner* PlayerBrain);
+	bool FindBestMove(UChessAIPlanner* Planner, const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, EChessTeam Team, FIntPoint& OutFrom, FIntPoint& OutTo, ETileInteraction& OutInteraction);	float ScoreCandidate(const FPlayoutResult& Result) const;
 	FString ExportBoard(const FVirtualBoard& Board) const;
 	FString ExportCandidate(const FLevelCandidate& Candidate) const;
+	
+	void ConfigureForTuning(UChessAIPlanner* Planner);
+	FVirtualBoard ParsePosition(const FTuningPosition& Position) const;
+	FAIWeights MutateWeights(const FAIWeights& Source, float Sigma, FRandomStream& RNG) const;
+	float RunMatch(const FAIWeights& Challenger, const FAIWeights& Champion);
 };

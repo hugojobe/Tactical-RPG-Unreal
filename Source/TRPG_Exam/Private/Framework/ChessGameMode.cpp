@@ -23,6 +23,7 @@ void AChessGameMode::BeginPlay()
 	GlobalPlanner = NewObject<UChessAIPlanner>(this, TEXT("GlobalPlanner"));
 	GlobalPlanner->GridManager = GridManager;
 	GlobalPlanner->InitializeZobrist();
+	GlobalPlanner->LoadWeights(TEXT("AIWeights.json"));
 	
 	GridManager->Initialize();
 	

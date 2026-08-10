@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "ChessMovementLogic.h"
-#include "Tiles/ChessTileBase.h"
+#include "JsonObjectConverter.h"
 #include "Units/ChessUnitBase.h"
 #include "ChessAIPlanner.generated.h"
 
@@ -110,6 +110,32 @@ struct FKillerMove
     FIntPoint To = FIntPoint(-1, -1);
 };
 
+USTRUCT()
+struct FAIWeights
+{
+    GENERATED_BODY()
+
+    UPROPERTY() float MaterialWeight = 10.0f; 
+    UPROPERTY() float HPWeight = 6.0f;
+    UPROPERTY() float DamageWeight = 8.0f;
+
+    // Positional
+    UPROPERTY() float PositionalScale = 3.0f;
+    UPROPERTY() float DevelopmentPenalty = 1.5f;
+    UPROPERTY() float PawnChainBonus = 2.0f;
+
+    // Strategic
+    UPROPERTY() float ReachWeight = 0.15f;
+    UPROPERTY() float HangingPenalty = 0.10f;
+
+    // Royals
+    UPROPERTY() float KingThreatWeight = 25.0f;
+    UPROPERTY() float EmperorAggression = 5.0f;
+
+    // Root behaviour
+    UPROPERTY() float ActivityBonusWeight = 0.0f;
+};
+
 UCLASS()
 class UChessAIPlanner : public UObject
 {
@@ -122,14 +148,17 @@ public:
     bool bAbortSearch = false;
     double SearchStartTime = 0.0;
     double MaxSearchTime = 1.5f;
+    int32 MaxSearchNodes = 0;
     
-    float ActivityBonusWeight = 0.01f;
     int32 ActivityBonusCap = 1;
     
-    float RootNoiseAmplitude = 0.025f;
+    float RootNoiseAmplitude = 0.0f;
     
     bool bExpectPlayerKing = true;
     bool bExpectEnemyKing = true;
+    
+    UPROPERTY()
+    FAIWeights Weights;
     
     FIntPoint SourcePosition = FIntPoint(-1, -1);
     
@@ -149,12 +178,7 @@ public:
     float Quiescence(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, float Alpha, float Beta, bool bIsMaximizing, int32 QDepth);
     
     bool bEnableStrategicEval = false;
-    float ReachWeight = 0.15f;
-    float HangingPenalty = 0.1f;
     TArray<FChessDecision> EvalScratchMoves;
-    
-    float KingThreatWeight = 25.0f;
-    float EmperorAggression = 5.0f;
     
     bool bUseNullMove = false;
     bool bUseLMR = true;
@@ -185,4 +209,7 @@ public:
     float Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing);
     float EvaluateBoard(const FVirtualBoard& Board, const TArray<FIntPoint>& Tiles);
     float EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, double TimeBudget);
+
+    void SaveWeights(const FString& FileName) const;
+    bool LoadWeights(const FString& FileName);
 };
