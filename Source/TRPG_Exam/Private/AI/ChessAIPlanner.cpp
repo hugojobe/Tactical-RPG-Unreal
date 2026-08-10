@@ -320,7 +320,7 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 	BestOverallDecision.Score = -BIG_NUMBER;
 
 	SearchStartTime = FPlatformTime::Seconds();
-	MaxSearchTime = 1;
+	MaxSearchTime = 1.5;
 	bAbortSearch = false;
 	LastCompletedDepth = 0;
 	
@@ -731,10 +731,11 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 
 		float PieceValueScore = Unit.UnitStats.KillRpReward * 10.0f;
 		float HPScore = Unit.UnitStats.CurrentHP * 6.0f;
-		float UnitPower = PieceValueScore + HPScore;
+		float DMGScore = Unit.UnitStats.Damage * 8.0f;
+		float UnitPower = PieceValueScore + HPScore + DMGScore;
 
 		float PositionalBonus = 0.0f;
-		float MaxBonus = UnitPower * 0.10f;
+		const float MaxBonus = 3.0f;
 
 		int32 X = i % Board.Width;
 		int32 Y = i / Board.Width;
