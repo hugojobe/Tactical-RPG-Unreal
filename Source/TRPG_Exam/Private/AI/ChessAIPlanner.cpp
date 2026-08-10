@@ -4,6 +4,7 @@
 #include "Framework/ChessGameMode.h"
 #include "Managers/ChessGridManager.h"
 
+FMovementRule UChessAIPlanner::MovementRuleByType[7];
 
 int32 FVirtualBoard::GetIndex(const FIntPoint& Pos) const
 {
@@ -92,6 +93,99 @@ bool FVirtualBoard::IsTileBlocked(const FIntPoint& Pos) const
 	return BlockedTurns[GetIndex(Pos)] > 0;
 }
 
+void UChessAIPlanner::ClearSearchHeuristics()
+{
+	for (int32 Ply = 0; Ply < MAX_SEARCH_PLY; Ply++)
+	{
+		KillerMoves[Ply][0] = FKillerMove();
+		KillerMoves[Ply][1] = FKillerMove();
+	}
+
+	for (int32 From = 0; From < 64; From++)
+		for (int32 To = 0; To < 64; To++)
+			HistoryHeuristic[From][To] /= 2;
+}
+
+float UChessAIPlanner::Quiescence(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, float Alpha, float Beta, bool bIsMaximizing, int32 QDepth)
+{
+	if (bAbortSearch) return 0.0f;
+
+	PositionsEvaluated++;
+	if (PositionsEvaluated % 1000 == 0 && FPlatformTime::Seconds() - SearchStartTime > MaxSearchTime)
+	{
+		bAbortSearch = true;
+		return 0.0f;
+	}
+
+	const float StandPat = EvaluateBoard(Board, Tiles);
+	if (QDepth <= 0) return StandPat;
+
+	if (bIsMaximizing)
+	{
+		if (StandPat >= Beta) return Beta;
+		Alpha = FMath::Max(Alpha, StandPat);
+	}
+	else
+	{
+		if (StandPat <= Alpha) return Alpha;
+		Beta = FMath::Min(Beta, StandPat);
+	}
+
+	const EChessTeam CurrentTeam = bIsMaximizing ? EChessTeam::Enemy : EChessTeam::Player;
+
+	TArray<FAvailableMove> Attacks;
+	for (int i = 0; i < Board.Width * Board.Height; ++i)
+	{
+		const FVirtualUnit& Unit = Board.Grid[i];
+		if (Unit.Team == EChessTeam::None || Unit.Team != CurrentTeam) continue;
+
+		const FIntPoint Pos(i % Board.Width, i / Board.Width);
+		
+		SearchScratchMoves.Reset();
+		ChessMovementLogic::CalculateLegalMoves(Board, Pos, UChessAIPlanner::GetMovementRule(Unit.UnitType), Unit.Team, SearchScratchMoves, false);
+
+		for (const FChessDecision& Decision : SearchScratchMoves)
+		{
+			if (Decision.Type != EChessDecisionType::Attack) continue;
+
+			FAvailableMove NewMove;
+			NewMove.From = Pos;
+			NewMove.To = Decision.TargetPosition;
+			NewMove.Unit = Unit;
+			NewMove.Interaction = ETileInteraction::Attack;
+
+			const FVirtualUnit& Victim = Board.Grid[Board.GetIndex(Decision.TargetPosition)];
+			NewMove.Priority = Victim.UnitStats.KillRpReward * 10.0f + Victim.UnitStats.CurrentHP * 2.0f;
+			Attacks.Add(NewMove);
+		}
+	}
+
+	if (Attacks.Num() == 0) return StandPat;
+
+	Attacks.Sort([](const FAvailableMove& A, const FAvailableMove& B) { return A.Priority > B.Priority; });
+
+	for (const FAvailableMove& Move : Attacks)
+	{
+		FVirtualBoard SimBoard = Board;
+		SimBoard.AttackUnit(Move.From, Move.To, Move.Unit, SimBoard.Grid[SimBoard.GetIndex(Move.To)]);
+
+		const float Eval = Quiescence(Tiles, SimBoard, Alpha, Beta, !bIsMaximizing, QDepth - 1);
+
+		if (bIsMaximizing)
+		{
+			Alpha = FMath::Max(Alpha, Eval);
+			if (Alpha >= Beta) return Beta;
+		}
+		else
+		{
+			Beta = FMath::Min(Beta, Eval);
+			if (Beta <= Alpha) return Alpha;
+		}
+	}
+
+	return bIsMaximizing ? Alpha : Beta;
+}
+
 FVirtualBoard UChessAIPlanner::GenerateVirtualBoard(TMap<FIntPoint, FVirtualUnit> VUnits, int Width, int Height)
 {
 	FVirtualBoard VBoard;
@@ -130,7 +224,7 @@ TMap<FIntPoint, float> UChessAIPlanner::GenerateThreatMap(FVirtualBoard VBoard)
 		FIntPoint Location(i % VBoard.Width, i / VBoard.Width);
 
 		const float DamageValue = Unit.UnitStats.Damage;
-		const bool bIsPawn = (Unit.UnitMovementRule.MovementStyle == EMovementStyle::Pawn);
+		const bool bIsPawn = GetMovementRule(Unit.UnitType).MovementStyle == EMovementStyle::Pawn;
 
 		TMap<FIntPoint, ETileInteraction> LegalMoves = AChessGridManager::GetValidMoves(Unit, Location, VBoard, true);
        
@@ -165,7 +259,7 @@ TMap<FIntPoint, float> UChessAIPlanner::GenerateDefenseMap(FVirtualBoard VBoard)
 		FIntPoint Location(i % VBoard.Width, i / VBoard.Width);
 		
 		const float DamageValue = Unit.UnitStats.Damage;
-		const bool bIsPawn = (Unit.UnitMovementRule.MovementStyle == EMovementStyle::Pawn);
+		const bool bIsPawn = GetMovementRule(Unit.UnitType).MovementStyle == EMovementStyle::Pawn;
 
 		TMap<FIntPoint, ETileInteraction> LegalMoves = AChessGridManager::GetValidMoves(Unit, Location, VBoard, true);
 		
@@ -213,6 +307,8 @@ void UChessAIPlanner::InitializeZobrist()
 		TranspositionTable[i].Key = 0;
 		TranspositionTable[i].Depth = -1;
 	}
+	
+	FMemory::Memzero(HistoryHeuristic, sizeof(HistoryHeuristic));
 }
 
 FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<FIntPoint>& Tiles, FVirtualBoard Board)
@@ -271,6 +367,8 @@ FChessDecision UChessAIPlanner::GetGlobalDecision(int ThinkDepth, const TArray<F
 	RootMoves.Sort([](const FRootMove& A, const FRootMove& B) {
 		return (A.Interaction == ETileInteraction::Attack) > (B.Interaction == ETileInteraction::Attack);
 	});
+	
+	ClearSearchHeuristics();
 	
 	for (int CurrentDepth = 1; CurrentDepth <= ThinkDepth; CurrentDepth++)
 	{
@@ -360,13 +458,44 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 		}
 	}
 	
-	if (Depth == 0) return EvaluateBoard(Board, Tiles);
+	if (Depth <= 0) return Quiescence(Tiles, Board, Alpha, Beta, bIsMaximizing, MaxQuiescenceDepth);
+	
+	EChessTeam CurrentTeam = bIsMaximizing ? EChessTeam::Enemy : EChessTeam::Player;
+	
+	if (bUseNullMove && Depth >= 3 && !bAbortSearch)
+	{
+		const bool bHasFiniteBound = bIsMaximizing ? (Beta < BIG_NUMBER * 0.5f) : (Alpha > -BIG_NUMBER * 0.5f);
+
+		int32 MovingPieces = 0;
+		for (int i = 0; i < Board.Width * Board.Height; ++i)
+		{
+			if (Board.Grid[i].Team == CurrentTeam) MovingPieces++;
+		}
+
+		if (bHasFiniteBound && MovingPieces >= 3)
+		{
+			const int32 Reduction = 2;
+			const float NullWindow = 0.5f;
+
+			if (bIsMaximizing)
+			{
+				const float NullScore = Minimax(Tiles, Board, Depth - 1 - Reduction, Beta - NullWindow, Beta, false);
+				if (!bAbortSearch && NullScore >= Beta) return Beta;
+			}
+			else
+			{
+				const float NullScore = Minimax(Tiles, Board, Depth - 1 - Reduction, Alpha, Alpha + NullWindow, true);
+				if (!bAbortSearch && NullScore <= Alpha) return Alpha;
+			}
+		}
+	}
 	
 	float OriginalAlpha = Alpha;
 	float OriginalBeta = Beta;
 	
-	EChessTeam CurrentTeam = bIsMaximizing ? EChessTeam::Enemy : EChessTeam::Player;
 	TArray<FAvailableMove> AllMoves;
+	
+	const int32 KillerIndex = FMath::Clamp(Depth, 0, MAX_SEARCH_PLY - 1);
 	
 	for (int i = 0; i < Board.Width * Board.Height; ++i)
 	{
@@ -376,22 +505,38 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 
 		FIntPoint Pos(i % Board.Width, i / Board.Width);
 
-		auto Moves = AChessGridManager::GetValidMoves(Unit, Pos, Board);
-    
-		for (auto& MovePair : Moves)
+		SearchScratchMoves.Reset();
+		ChessMovementLogic::CalculateLegalMoves(Board, Pos, UChessAIPlanner::GetMovementRule(Unit.UnitType), Unit.Team, SearchScratchMoves, false);
+
+		for (const FChessDecision& Decision : SearchScratchMoves)
 		{
 			FAvailableMove NewMove;
 			NewMove.From = Pos;
-			NewMove.To = MovePair.Key;
+			NewMove.To = Decision.TargetPosition;
 			NewMove.Unit = Unit;
-			NewMove.Interaction = MovePair.Value;
+			NewMove.Interaction = (Decision.Type == EChessDecisionType::Attack) ? ETileInteraction::Attack : ETileInteraction::Move;
         
-			if (MovePair.Key == TTBestMove)
-				NewMove.Priority = 1000.0f;
-			else if (MovePair.Value == ETileInteraction::Attack)
-				NewMove.Priority = 100.0f;
+			if (Decision.TargetPosition == TTBestMove)
+			{
+				NewMove.Priority = 1000000.f;
+			}
+			else if (NewMove.Interaction == ETileInteraction::Attack)
+			{
+				const FVirtualUnit& Victim = Board.Grid[Board.GetIndex(Decision.TargetPosition)];
+				NewMove.Priority = 100000.f + Victim.UnitStats.KillRpReward * 10.f + Victim.UnitStats.CurrentHP * 2.f;
+			}
+			else if (KillerMoves[KillerIndex][0].From == Pos && KillerMoves[KillerIndex][0].To == Decision.TargetPosition)
+			{
+				NewMove.Priority = 90000.f;
+			}
+			else if (KillerMoves[KillerIndex][1].From == Pos && KillerMoves[KillerIndex][1].To == Decision.TargetPosition)
+			{
+				NewMove.Priority = 80000.f;
+			}
 			else
-				NewMove.Priority = 0.0f;
+			{
+				NewMove.Priority = FMath::Min(static_cast<float>(HistoryHeuristic[Board.GetIndex(Pos)][Board.GetIndex(Decision.TargetPosition)]), 70000.f);
+			}
         
 			AllMoves.Add(NewMove);
 		}
@@ -411,16 +556,31 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 
 	if (bIsMaximizing)
 	{
+		int32 MoveIndex = 0;
 		for (const FAvailableMove& Move : AllMoves)
 		{
-			FVirtualBoard SimBoard = Board;	
-			
+			FVirtualBoard SimBoard = Board;
+
 			if (Move.Interaction == ETileInteraction::Move)
 				SimBoard.MoveUnit(Move.From, Move.To, Move.Unit);
 			else if (Move.Interaction == ETileInteraction::Attack)
 				SimBoard.AttackUnit(Move.From, Move.To, Move.Unit, SimBoard.Grid[SimBoard.GetIndex(Move.To)]);
 			
-			float Eval = Minimax(Tiles, SimBoard, Depth - 1, Alpha, Beta, false);
+			float Eval;
+			const bool bCanReduce = bUseLMR && MoveIndex >= 4 && Depth >= 3 && Move.Interaction != ETileInteraction::Attack;
+
+			if (bCanReduce)
+			{
+				Eval = Minimax(Tiles, SimBoard, Depth - 2, Alpha, Beta, false);
+				if (Eval > Alpha)
+				{
+					Eval = Minimax(Tiles, SimBoard, Depth - 1, Alpha, Beta, false);
+				}
+			}
+			else
+			{
+				Eval = Minimax(Tiles, SimBoard, Depth - 1, Alpha, Beta, false);
+			}
 			
 			if (Eval > BestScore)
 			{
@@ -429,11 +589,27 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 			}
 			
 			Alpha = FMath::Max(Alpha, Eval);
-			if (Beta <= Alpha) break;
+			if (Beta <= Alpha)
+			{
+				if (Move.Interaction != ETileInteraction::Attack)
+				{
+					FKillerMove& First = KillerMoves[KillerIndex][0];
+					if (First.From != Move.From || First.To != Move.To)
+					{
+						KillerMoves[KillerIndex][1] = First;
+						KillerMoves[KillerIndex][0] = { Move.From, Move.To };
+					}
+					HistoryHeuristic[Board.GetIndex(Move.From)][Board.GetIndex(Move.To)] += Depth * Depth;
+				}
+				break;
+			}
+			
+			MoveIndex++;
 		}
 	}
 	else
 	{
+		int32 MoveIndex = 0;
 		for (const FAvailableMove& Move : AllMoves)
 		{
 			FVirtualBoard SimBoard = Board;
@@ -443,7 +619,21 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 			else if (Move.Interaction == ETileInteraction::Attack)
 				SimBoard.AttackUnit(Move.From, Move.To, Move.Unit, SimBoard.Grid[SimBoard.GetIndex(Move.To)]);            
 			
-			float Eval = Minimax(Tiles, SimBoard, Depth - 1, Alpha, Beta, true);
+			float Eval;
+			const bool bCanReduce = bUseLMR && MoveIndex >= 4 && Depth >= 3 && Move.Interaction != ETileInteraction::Attack;
+			
+			if (bCanReduce)
+			{
+				Eval = Minimax(Tiles, SimBoard, Depth - 2, Alpha, Beta, true);
+				if (Eval < Beta)
+				{
+					Eval = Minimax(Tiles, SimBoard, Depth - 1, Alpha, Beta, true);
+				}
+			}
+			else
+			{
+				Eval = Minimax(Tiles, SimBoard, Depth - 1, Alpha, Beta, true);
+			}
 			
 			if (Eval < BestScore)
 			{
@@ -452,7 +642,20 @@ float UChessAIPlanner::Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoa
 			}
 			
 			Beta = FMath::Min(Beta, Eval);
-			if (Beta <= Alpha) break;
+			if (Beta <= Alpha)
+			{
+				if (Move.Interaction != ETileInteraction::Attack)
+				{
+					FKillerMove& First = KillerMoves[KillerIndex][0];
+					if (First.From != Move.From || First.To != Move.To)
+					{
+						KillerMoves[KillerIndex][1] = First;
+						KillerMoves[KillerIndex][0] = { Move.From, Move.To };
+					}
+					HistoryHeuristic[Board.GetIndex(Move.From)][Board.GetIndex(Move.To)] += Depth * Depth;
+				}
+				break;
+			}
 		}
 	}
 	
@@ -478,6 +681,48 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 	bool bPlayerKingAlive = false;
 	bool bAiKingAlive = false;
 	float Score = 0;
+	
+	int32 Coverage[2][MAX_CHESS_BOARD_SIZE] = {};
+	int32 Reach[2] = { 0, 0 };
+	float AlliedMaterial[2] = { 0.f, 0.f };
+	TArray<TPair<FIntPoint, EChessTeam>, TInlineAllocator<16>> UnitPositions;
+
+	if (bEnableStrategicEval)
+	{
+		for (int i = 0; i < Board.Width * Board.Height; ++i)
+		{
+			const FVirtualUnit& Unit = Board.Grid[i];
+			if (Unit.Team == EChessTeam::None) continue;
+
+			const int32 TeamIdx = (Unit.Team == EChessTeam::Player) ? 0 : 1;
+			const FIntPoint Pos(i % Board.Width, i / Board.Width);
+			
+			UnitPositions.Add({ Pos, Unit.Team });
+			
+			if (Unit.UnitType != EChessUnitType::King && Unit.UnitType != EChessUnitType::Emperor)
+			{
+				AlliedMaterial[TeamIdx] += Unit.UnitStats.KillRpReward * 10.0f + Unit.UnitStats.CurrentHP * 2.0f;
+			}
+
+			EvalScratchMoves.Reset();
+			ChessMovementLogic::CalculateLegalMoves(Board, Pos, UChessAIPlanner::GetMovementRule(Unit.UnitType), Unit.Team, EvalScratchMoves, true);
+
+			Reach[TeamIdx] += EvalScratchMoves.Num();
+			for (const FChessDecision& Decision : EvalScratchMoves)
+			{
+				if (Decision.Type == EChessDecisionType::Attack)
+				{
+					Coverage[TeamIdx][Board.GetIndex(Decision.TargetPosition)]++;
+				}
+			}
+		}
+	}
+	
+	float KingSafetyScale[2];
+	for (int32 T = 0; T < 2; T++)
+	{
+		KingSafetyScale[T] = FMath::Clamp(AlliedMaterial[T] / 40.0f, 0.0f, 1.0f);
+	}
 
 	for (int i = 0; i < Board.Width * Board.Height; ++i)
 	{
@@ -485,7 +730,7 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 		if (Unit.Team == EChessTeam::None) continue;
 
 		float PieceValueScore = Unit.UnitStats.KillRpReward * 10.0f;
-		float HPScore = Unit.UnitStats.CurrentHP * 2.0f;
+		float HPScore = Unit.UnitStats.CurrentHP * 6.0f;
 		float UnitPower = PieceValueScore + HPScore;
 
 		float PositionalBonus = 0.0f;
@@ -494,11 +739,12 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 		int32 X = i % Board.Width;
 		int32 Y = i / Board.Width;
 
-		if (Unit.UnitMovementRule.MovementStyle == EMovementStyle::Pawn)
+		if (UChessAIPlanner::GetMovementRule(Unit.UnitType).MovementStyle == EMovementStyle::Pawn)
 		{
-			float Advancement = (Unit.Team == EChessTeam::Enemy) ? (Board.Height - 1 - Y) : Y;			PositionalBonus = Advancement * (MaxBonus / Board.Height);
+			float Advancement = (Unit.Team == EChessTeam::Enemy) ? (Board.Height - 1 - Y) : Y;
+			PositionalBonus = Advancement * (MaxBonus / Board.Height);
 		}
-		else if (Unit.UnitType != EChessUnitType::King)
+		else if (Unit.UnitType != EChessUnitType::King && Unit.UnitType != EChessUnitType::Emperor)
 		{
 			const float CenterX = (Board.Width - 1) / 2.0f;
 			const float CenterY = (Board.Height - 1) / 2.0f;
@@ -518,32 +764,54 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 		}
 		
 		float FinalUnitScore = 0.0f;
+		const int32 OwnIdx = (Unit.Team == EChessTeam::Player) ? 0 : 1;
+		const int32 FoeIdx = 1 - OwnIdx;
 
-		if (Unit.UnitType == EChessUnitType::King) 
+		if (Unit.UnitType == EChessUnitType::King || Unit.UnitType == EChessUnitType::Emperor)
 		{
 			if (Unit.Team == EChessTeam::Player) bPlayerKingAlive = true;
 			else bAiKingAlive = true;
 
 			FinalUnitScore = 500.0f + (Unit.UnitStats.CurrentHP * 50.0f) + PositionalBonus;
+
+			if (bEnableStrategicEval)
+			{
+				float Danger = Coverage[FoeIdx][i] * KingThreatWeight;
+				if (Coverage[OwnIdx][i] > 0) Danger *= 0.5f;
+
+				const float SafetyScale = (Unit.UnitType == EChessUnitType::Emperor) ? 0.0f : KingSafetyScale[OwnIdx];
+				FinalUnitScore -= Danger * SafetyScale;
+
+				if (Unit.UnitType == EChessUnitType::Emperor)
+				{
+					for (const auto& Entry : UnitPositions)
+					{
+						if (Entry.Value == Unit.Team || Entry.Value == EChessTeam::None) continue;
+						const int32 Dist = FMath::Max(FMath::Abs(Entry.Key.X - X), FMath::Abs(Entry.Key.Y - Y));
+						if (Dist <= 2) FinalUnitScore += (3 - Dist) * EmperorAggression;
+					}
+				}
+			}
 		}
 		else
 		{
 			FinalUnitScore = UnitPower + PositionalBonus;
 		}
 		
-		if (Unit.Team == EChessTeam::Player)
+		if (bEnableStrategicEval && Coverage[OwnIdx][i] == 0 && Coverage[FoeIdx][i] > 0)
 		{
-			Score -= FinalUnitScore;
+			FinalUnitScore -= UnitPower * HangingPenalty;
 		}
-		else if (Unit.Team == EChessTeam::Enemy)
-		{
-			Score += FinalUnitScore;
-		}
+
+		if (Unit.Team == EChessTeam::Player) Score -= FinalUnitScore;
+		else Score += FinalUnitScore;
 	}
 	
+	if (bEnableStrategicEval) Score += (Reach[1] - Reach[0]) * ReachWeight;
+
 	if (!bPlayerKingAlive && bExpectPlayerKing) Score += 1000000.0f;
 	if (!bAiKingAlive && bExpectEnemyKing) Score -= 1000000.0f;
-	
+
 	return Score;
 }
 

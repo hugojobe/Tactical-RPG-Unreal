@@ -267,7 +267,7 @@ TMap<FIntPoint, ETileInteraction> AChessGridManager::GetValidMoves(const FVirtua
 	ChessMovementLogic::CalculateLegalMoves(
 		Board,
 		FIntPoint(UnitPos.X, UnitPos.Y),
-		Unit.UnitMovementRule,
+		UChessAIPlanner::GetMovementRule(Unit.UnitType),
 		Unit.Team,
 		RawMoves,
 		bIncludeEmptyAttacks
@@ -685,7 +685,7 @@ bool AChessGridManager::CanTeamMove(EChessTeam Team, FVirtualBoard& Board)
 		{
 			FVirtualUnit VUnit;
 			VUnit.Team = Unit->Team;
-			VUnit.UnitMovementRule = Unit->MovementRule;
+			UChessAIPlanner::RegisterMovementRule(Unit->UnitType, Unit->MovementRule);
 			VUnit.UnitStats = Unit->Stats;
 			VUnit.UnitType = Unit->UnitType;
 			
@@ -707,7 +707,7 @@ FVirtualUnit AChessGridManager::MakeVirtualUnit(const AChessUnitBase* Unit)
 	if (!Unit) return VUnit;
 
 	VUnit.Team = Unit->Team;
-	VUnit.UnitMovementRule = Unit->MovementRule;
+	UChessAIPlanner::RegisterMovementRule(Unit->UnitType, Unit->MovementRule);
 	VUnit.UnitType = Unit->UnitType;
 	
 	VUnit.UnitStats = Unit->Stats;

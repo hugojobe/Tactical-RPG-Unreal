@@ -8,6 +8,7 @@
 
 #define MAX_CHESS_BOARD_SIZE 64
 #define TT_SIZE 1048583
+#define MAX_SEARCH_PLY 64
 
 UENUM(BlueprintType)
 enum class EChessDecisionType: uint8
@@ -40,9 +41,6 @@ struct FVirtualUnit
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     EChessTeam Team = EChessTeam::None;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FMovementRule UnitMovementRule;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FUnitStats UnitStats;
@@ -81,10 +79,10 @@ public:
     void AttackUnit(FIntPoint SourcePos, FIntPoint TargetPos, FVirtualUnit SourceUnit, FVirtualUnit TargetUnit);
 
     uint64 ComputeHash(const uint64 Zobrist[64][3][7], bool bIsMaximizing) const;
-    virtual bool IsValidGridPos(const FIntPoint& Pos, int BoardWidth, int BoardHeight) const;
-    virtual bool IsTileOccupied(const FIntPoint& Pos) const;
-    virtual EChessTeam GetTeamAt(const FIntPoint& Pos) const;
-    virtual bool IsTileBlocked(const FIntPoint& Pos) const;
+    bool IsValidGridPos(const FIntPoint& Pos, int BoardWidth, int BoardHeight) const;
+    bool IsTileOccupied(const FIntPoint& Pos) const;
+    EChessTeam GetTeamAt(const FIntPoint& Pos) const;
+    bool IsTileBlocked(const FIntPoint& Pos) const;
 };
 
 USTRUCT(BlueprintType)
@@ -104,6 +102,12 @@ struct FAvailableMove {
     FVirtualUnit Unit;
     ETileInteraction Interaction;
     float Priority;
+};
+
+struct FKillerMove
+{
+    FIntPoint From = FIntPoint(-1, -1);
+    FIntPoint To = FIntPoint(-1, -1);
 };
 
 UCLASS()
@@ -137,6 +141,37 @@ public:
     uint64 ZobristTable[64][3][7];
     TArray<FTTEntry> TranspositionTable;
     
+    FKillerMove KillerMoves[MAX_SEARCH_PLY][2];
+    int32 HistoryHeuristic[64][64];
+    void ClearSearchHeuristics();
+    
+    int32 MaxQuiescenceDepth = 4;
+    float Quiescence(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, float Alpha, float Beta, bool bIsMaximizing, int32 QDepth);
+    
+    bool bEnableStrategicEval = false;
+    float ReachWeight = 0.15f;
+    float HangingPenalty = 0.1f;
+    TArray<FChessDecision> EvalScratchMoves;
+    
+    float KingThreatWeight = 25.0f;
+    float EmperorAggression = 5.0f;
+    
+    bool bUseNullMove = false;
+    bool bUseLMR = true;
+    
+    TArray<FChessDecision> SearchScratchMoves;
+    
+    static FMovementRule MovementRuleByType[7];
+
+    static const FMovementRule& GetMovementRule(EChessUnitType Type)
+    {
+        return MovementRuleByType[static_cast<int32>(Type)];
+    }
+
+    static void RegisterMovementRule(EChessUnitType Type, const FMovementRule& Rule)
+    {
+        MovementRuleByType[static_cast<int32>(Type)] = Rule;
+    }
     
     UFUNCTION(BlueprintCallable)
     static FVirtualBoard GenerateVirtualBoard(TMap<FIntPoint, FVirtualUnit> VUnits, int Width, int Height);

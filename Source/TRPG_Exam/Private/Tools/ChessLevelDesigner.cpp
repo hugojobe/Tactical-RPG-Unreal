@@ -174,7 +174,7 @@ FVirtualUnit AChessLevelDesigner::MakeUnit(EChessUnitType Type, EChessTeam Team)
 		Unit.UnitStats.CurrentHP = Row->MaxHP;
 		Unit.UnitStats.Damage = Row->Damage;
 		Unit.UnitStats.KillRpReward = Row->KillRpReward;
-		Unit.UnitMovementRule = Row->MovementRule;
+		UChessAIPlanner::RegisterMovementRule(Type, Row->MovementRule);
 	}
 	return Unit;
 }
