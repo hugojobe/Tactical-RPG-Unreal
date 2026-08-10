@@ -52,6 +52,6 @@ void UChessAbility_Blessing::ExecuteAbilityEffect(AChessUnitBase* Unit, FIntPoin
 	const int32 Heal = FMath::Min(static_cast<int32>(HealAmount), MissingHealth);
 	if (Heal <= 0) return;
 	
-	OnAbilityAffectedUnitFeedback(AbilityType, Unit, Target);
+	OnAbilityAffectedUnitFeedback(AbilityType, AbilityDisplayName, Unit, Target);
 	ApplyFlatDamage(Unit, Target, -Heal);
 }

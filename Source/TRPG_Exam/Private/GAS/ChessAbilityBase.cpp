@@ -37,7 +37,7 @@ void UChessAbilityBase::ActivateAbility(
 	
 	ExecuteAbilityEffect(Unit, Unit->PendingAbilityTarget);
 	
-	OnAbilityActivatedFeedback(AbilityType, Unit, Unit->PendingAbilityTarget);
+	OnAbilityActivatedFeedback(AbilityType, AbilityDisplayName, Unit, Unit->PendingAbilityTarget);
 	
 	if (CooldownTurns != 0)
 	{

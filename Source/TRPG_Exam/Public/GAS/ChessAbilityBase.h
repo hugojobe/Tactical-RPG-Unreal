@@ -28,13 +28,16 @@ public:
 	UChessAbilityBase();
 	
 	UFUNCTION(BlueprintImplementableEvent, Category = "Chess Ability")
-	void OnAbilityActivatedFeedback(EChessAbilityType Type, AChessUnitBase* Unit, FIntPoint TargetPos);
-	
+	void OnAbilityActivatedFeedback(EChessAbilityType Type, const FText& DisplayName, AChessUnitBase* Unit, FIntPoint TargetPos);
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "Chess Ability")
-	void OnAbilityAffectedUnitFeedback(EChessAbilityType Type, AChessUnitBase* Caster, AChessUnitBase* AffectedUnit);
+	void OnAbilityAffectedUnitFeedback(EChessAbilityType Type, const FText& DisplayName, AChessUnitBase* Caster, AChessUnitBase* AffectedUnit);
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chess Ability")
 	EChessAbilityType AbilityType = EChessAbilityType::None;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chess Ability")
+	FText AbilityDisplayName;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chess Ability")
 	EChessAbilityTargeting Targeting = EChessAbilityTargeting::Self;

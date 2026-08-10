@@ -820,21 +820,14 @@ void AChessGridManager::ActivateSelectedUnitAbility(FIntPoint TargetPos)
 		OnAbilityButtonPressed();
 		
 		UAbilitySystemComponent* ASC = SelectedUnit->AbilitySystemComponent;
-		UE_LOG(LogTemp, Warning, TEXT("[HJ] Post-activation: CooldownTag=%d RootedTag=%d"),
-			ASC->HasMatchingGameplayTag(TAG_Ability_Cooldown) ? 1 : 0,
-			ASC->HasMatchingGameplayTag(TAG_Ability_Rooted) ? 1 : 0);
 
 		FGameplayTagContainer DebugTags;
 		DebugTags.AddTag(TAG_Ability_Cooldown);
 		DebugTags.AddTag(TAG_Ability_Rooted);
 		const FGameplayEffectQuery DebugQuery = FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(DebugTags);
-		for (const FActiveGameplayEffectHandle& EffectHandle : ASC->GetActiveEffects(DebugQuery))
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[HJ] Turn-stack effect active, stacks: %d"), ASC->GetCurrentStackCount(EffectHandle));
-		}
 		
-		//DeselectUnit();
 		GameMode->GenerateVirtualBoard();
+		DeselectUnit();
 	}
 	else
 	{

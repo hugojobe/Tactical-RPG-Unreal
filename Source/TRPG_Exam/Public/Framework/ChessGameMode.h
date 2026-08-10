@@ -10,6 +10,19 @@
 
 class AChessGridManager;
 
+struct FEnemyAbilityCandidate
+{
+	FIntPoint UnitPos = FIntPoint(-1, -1);
+	EChessAbilityType Type = EChessAbilityType::None;
+};
+
+struct FEnemyAbilityChoice
+{
+	bool bUseAbility = false;
+	FIntPoint UnitPos = FIntPoint(-1, -1);
+	FIntPoint TargetPos = FIntPoint(-1, -1);
+};
+
 UCLASS()
 class TRPG_EXAM_API AChessGameMode : public AGameModeBase
 {
@@ -20,6 +33,9 @@ public:
 	
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Framework")
+	int32 TurnCount = 0;
 	
 	bool bPlayerKingExists = false;
 	bool bEnemyKingExists = false;
@@ -47,11 +63,8 @@ public:
 	float AbilityScoreMargin = 2.f;
 
 	UPROPERTY(EditAnywhere, Category = "AI")
-	int32 AbilitySearchDepth = 5;
+	int32 AbilitySearchDepth = 8;
 
-	UFUNCTION(BlueprintCallable, Category = "AI")
-	void TryUseEnemyAbility();
-    
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Game Flow")
 	void PlayerActionFinished(AChessGridManager* Manager);
 	
@@ -93,6 +106,20 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void TickAbilityCooldowns(EChessTeam Team);
+	
+	UPROPERTY(EditAnywhere, Category = "AI")
+	int32 AbilityScreeningDepth = 2;
+
+	UPROPERTY(EditAnywhere, Category = "AI")
+	int32 AbilityFinalDepth = 5;
+
+	UPROPERTY(EditAnywhere, Category = "AI")
+	int32 AbilityFinalistCount = 3;
+
+	TArray<FEnemyAbilityCandidate> GatherEnemyAbilityCandidates() const;
+	FEnemyAbilityChoice EvaluateAbilityCandidates(const TArray<FEnemyAbilityCandidate>& Candidates, FVirtualBoard Board) const;
+	void FinishEnemyAbilityPhase(const FEnemyAbilityChoice& Choice);
+	void BeginEnemyMovePhase();
 	
 	UFUNCTION(Exec)
 	void DisplayVirtualBoard();

@@ -115,6 +115,14 @@ TArray<FIntPoint> ChessAbilitySim::GetAbilityTargets(const FVirtualBoard& Board,
 		break;
 	}
 	case EChessAbilityType::Bastion:
+	{
+		for (const FIntPoint& Direction : { FIntPoint(1,0), FIntPoint(-1,0) })
+		{
+			const FIntPoint Pos = UnitPos + Direction;
+			if (IsFreeTile(Board, Pos)) { Result.Add(UnitPos); break; }
+		}
+		break;
+	}
 	case EChessAbilityType::Execution:
 	{
 		Result.Add(UnitPos);
@@ -179,7 +187,6 @@ void ChessAbilitySim::ApplyAbility(FVirtualBoard& Board, const FIntPoint& UnitPo
 	}
 	case EChessAbilityType::Summon:
 	{
-		// Same deterministic rule as the real ability: free adjacent tile closest to the ally
 		FIntPoint BestTile(-1, -1);
 		int32 BestDist = MAX_int32;
 		for (const FIntPoint& Offset : Neighbors8)
@@ -196,9 +203,19 @@ void ChessAbilitySim::ApplyAbility(FVirtualBoard& Board, const FIntPoint& UnitPo
 		break;
 	}
 	case EChessAbilityType::Bastion:
-		Board.Grid[SelfIdx].UnitStats.CurrentHP += 2;
+	{
+		for (const FIntPoint& Dir : { FIntPoint(1,0), FIntPoint(-1,0) })
+		{
+			FIntPoint Pos = UnitPos + Dir;
+			while (IsFreeTile(Board, Pos))
+			{
+				Board.BlockedTurns[Board.GetIndex(Pos)] = 2;
+				Pos += Dir;
+			}
+		}
 		Board.Grid[SelfIdx].RootedTurns = 2;
-		break;
+		break;	
+	}
 
 	case EChessAbilityType::Execution:
 		Board.Grid[SelfIdx].UnitStats.Damage += 2;

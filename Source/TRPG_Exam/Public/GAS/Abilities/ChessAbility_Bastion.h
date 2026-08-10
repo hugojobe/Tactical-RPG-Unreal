@@ -15,8 +15,8 @@ class TRPG_EXAM_API UChessAbility_Bastion : public UChessAbilityBase
 public:
 	UChessAbility_Bastion();
 	
-	UPROPERTY(EditDefaultsOnly, Category="Chess Ability")
-	int32 BonusHealth = 2;
+	UPROPERTY(EditDefaultsOnly, Category = "Chess Ability")
+	int32 WallTurns = 2;
 	
 	UPROPERTY(EditDefaultsOnly, Category="Chess Ability")
 	int32 RootedTurns = 1;

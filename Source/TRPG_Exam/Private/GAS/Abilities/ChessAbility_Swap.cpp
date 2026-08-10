@@ -44,12 +44,20 @@ void UChessAbility_Swap::ExecuteAbilityEffect(AChessUnitBase* Unit, FIntPoint Ta
 
 	AChessUnitBase* Other = Grid->GetUnitAt(TargetPos);
 	if (!Other) return;
-	
+
 	const FIntPoint Origin(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
-	
-	Grid->TeleportUnitTo(Other, Origin);
-	Grid->TeleportUnitTo(Unit, TargetPos);
-	
-	OnAbilityAffectedUnitFeedback(AbilityType, Unit, Other);
-	OnAbilityAffectedUnitFeedback(AbilityType, Unit, Unit);
+
+	Grid->ClearTile(Origin);
+	Grid->ClearTile(TargetPos);
+
+	Grid->RegisterUnitAt(TargetPos, Unit);
+	Grid->RegisterUnitAt(Origin, Other);
+
+	Unit->LastPosition = Origin;
+	Other->LastPosition = TargetPos;
+	Unit->bHasMoved = true;
+	Other->bHasMoved = true;
+
+	OnAbilityAffectedUnitFeedback(AbilityType, AbilityDisplayName, Unit, Other);
+	OnAbilityAffectedUnitFeedback(AbilityType, AbilityDisplayName, Unit, Unit);
 }

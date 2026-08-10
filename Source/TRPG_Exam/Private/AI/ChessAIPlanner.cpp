@@ -42,6 +42,11 @@ uint64 FVirtualBoard::ComputeHash(const uint64 Zobrist[64][3][7], bool bIsMaximi
 	uint64 HashKey = 0;
 	for (int i = 0; i < Width * Height; ++i)
 	{
+		if (BlockedTurns[i] > 0)
+		{
+			HashKey ^= Zobrist[i][2][0];
+		}
+		
 		if (Grid[i].Team != EChessTeam::None)
 		{
 			int TeamIdx = static_cast<int>(Grid[i].Team);
@@ -56,11 +61,6 @@ uint64 FVirtualBoard::ComputeHash(const uint64 Zobrist[64][3][7], bool bIsMaximi
 				+ (Grid[i].bHasMoved ? 0x27D4EB2F165667C5ULL : 0);
 			
 			HashKey ^= (BaseKey + StateModifier * (i + 1));
-			
-			if (BlockedTurns[i] > 0)
-			{
-				HashKey ^= Zobrist[i][2][0];
-			}
 		}
 	}
 	
@@ -547,10 +547,10 @@ float UChessAIPlanner::EvaluateBoard(const FVirtualBoard& Board, const TArray<FI
 	return Score;
 }
 
-float UChessAIPlanner::EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth)
+float UChessAIPlanner::EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, double TimeBudget)
 {
 	SearchStartTime = FPlatformTime::Seconds();
-	MaxSearchTime = 0.25f;
+	MaxSearchTime = TimeBudget;
 	bAbortSearch = false;
 
 	return Minimax(Tiles, Board, Depth, -BIG_NUMBER, BIG_NUMBER, true);

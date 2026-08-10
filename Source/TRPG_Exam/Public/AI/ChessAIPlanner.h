@@ -117,7 +117,7 @@ public:
     int32 PositionsEvaluated = 0;
     bool bAbortSearch = false;
     double SearchStartTime = 0.0;
-    double MaxSearchTime = 1;
+    double MaxSearchTime = 1.5f;
     
     float ActivityBonusWeight = 0.01f;
     int32 ActivityBonusCap = 1;
@@ -149,5 +149,5 @@ public:
     
     float Minimax(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, float Alpha, float Beta, bool bIsMaximizing);
     float EvaluateBoard(const FVirtualBoard& Board, const TArray<FIntPoint>& Tiles);
-    float EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth);
+    float EvaluateBoardShallow(const TArray<FIntPoint>& Tiles, const FVirtualBoard& Board, int Depth, double TimeBudget);
 };

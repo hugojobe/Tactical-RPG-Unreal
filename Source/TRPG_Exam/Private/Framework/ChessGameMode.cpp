@@ -178,60 +178,30 @@ void AChessGameMode::StartEnemyTurn_Implementation()
 {   
 	SetCurrentTurn(ETurnState::Enemy);
 	GridManager->CurrentTurnActionState = ETurnState::Enemy;
-    
+
 	FTimerHandle TimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
 	{
-		TryUseEnemyAbility();
-		
-		TArray<AActor*> ActorList;
-		UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), ActorList);
-
-		GlobalPlanner->UnitLastPositions.Empty();
-		GlobalPlanner->UnitIdleTurns.Empty();
-		for (AActor* Actor : ActorList)
-		{
-			AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor);
-			if (Unit && Unit->Attributes->GetHealth() > 0 && Unit->Team == EChessTeam::Enemy)
-			{
-				GlobalPlanner->UnitLastPositions.Add(FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), Unit->LastPosition);
-				GlobalPlanner->UnitIdleTurns.Add(FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), Unit->TurnsSinceLastAction);
-				Unit->TurnsSinceLastAction++;
-			}
-		}
+		TArray<FEnemyAbilityCandidate> Candidates = GatherEnemyAbilityCandidates();
 
 		GlobalPlanner->AddToRoot();
 		TWeakObjectPtr<AChessGameMode> WeakThis(this);
 
-		Async(EAsyncExecution::Thread, [WeakThis, Planner = GlobalPlanner]()
+		Async(EAsyncExecution::Thread, [WeakThis, Planner = GlobalPlanner, Candidates, Board = VirtualBoard]()
 		{
-			FChessDecision BestDecision;
-			AChessUnitBase* BestUnit = nullptr;
-
+			FEnemyAbilityChoice Choice;
 			if (WeakThis.IsValid())
 			{
-				WeakThis->ComputeGlobalAI(BestDecision, BestUnit, {});
+				Choice = WeakThis->EvaluateAbilityCandidates(Candidates, Board);
 			}
 
-			Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, Planner, BestDecision]()
+			Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, Planner, Choice]()
 			{
 				Planner->RemoveFromRoot();
 				if (!WeakThis.IsValid()) return;
-
-				AChessUnitBase* BestUnit = WeakThis->GridManager->GetUnitAt(BestDecision.SourcePosition);
-				if (BestUnit && BestUnit->GetController())
-				{
-					if (AChessAIController* ChessAIC = Cast<AChessAIController>(BestUnit->GetController()))
-					{
-						ChessAIC->PerformTask(BestDecision);
-					}
-				}
-				else
-				{
-					WeakThis->EndEnemyTurn();
-				}
+				WeakThis->FinishEnemyAbilityPhase(Choice);
 			});
-		});    
+		});
 	}, 0.5f, false);
 }
 
@@ -255,61 +225,6 @@ void AChessGameMode::ComputeGlobalAI_Implementation(FChessDecision& BestTask, AC
 void AChessGameMode::SetCurrentTurn_Implementation(ETurnState NewTurnState)
 {
 	CurrentTurn = NewTurnState;
-}
-
-void AChessGameMode::TryUseEnemyAbility()
-{
-	if (!GridManager || !GlobalPlanner) return;
-
-	TArray<FIntPoint> Tiles;
-	GridManager->TileActors.GenerateKeyArray(Tiles);
-
-	const float BaselineScore = GlobalPlanner->EvaluateBoardShallow(Tiles, VirtualBoard, AbilitySearchDepth);
-
-	AChessUnitBase* BestUnit = nullptr;
-	FIntPoint BestTarget(-1, -1);
-	float BestScore = BaselineScore + AbilityScoreMargin; 
-
-	TArray<AActor*> ActorList;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), ActorList);
-
-	for (AActor* Actor : ActorList)
-	{
-		AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor);
-		if (!Unit || Unit->Team != EChessTeam::Enemy) continue;
-		if (!Unit->AbilitySystemComponent || Unit->Attributes->GetHealth() <= 0) continue;
-		if (Unit->AbilitySystemComponent->HasMatchingGameplayTag(TAG_Ability_Cooldown)) continue;
-
-		const FGameplayAbilitySpec* Spec = Unit->AbilitySystemComponent->FindAbilitySpecFromHandle(Unit->ActiveAbilityHandle);
-		if (!Spec) continue;
-		const UChessAbilityBase* AbilityCDO = Cast<UChessAbilityBase>(Spec->Ability);
-		if (!AbilityCDO || !AbilityCDO->bActivatable) continue;
-
-		const FIntPoint UnitPos(Unit->GridCoordinates.X, Unit->GridCoordinates.Y);
-
-		for (const FIntPoint& Target : ChessAbilitySim::GetAbilityTargets(VirtualBoard, UnitPos, AbilityCDO->AbilityType))
-		{
-			FVirtualBoard SimBoard = VirtualBoard;
-			ChessAbilitySim::ApplyAbility(SimBoard, UnitPos, AbilityCDO->AbilityType, Target);
-
-			const float Score = GlobalPlanner->EvaluateBoardShallow(Tiles, SimBoard, AbilitySearchDepth);
-			if (Score > BestScore)
-			{
-				BestScore = Score;
-				BestUnit = Unit;
-				BestTarget = Target;
-			}
-		}
-	}
-
-	if (BestUnit)
-	{
-		BestUnit->PendingAbilityTarget = BestTarget;
-		if (BestUnit->AbilitySystemComponent->TryActivateAbility(BestUnit->ActiveAbilityHandle))
-		{
-			GenerateVirtualBoard();
-		}
-	}
 }
 
 void AChessGameMode::TickAbilityCooldowns(EChessTeam Team)
@@ -336,6 +251,164 @@ void AChessGameMode::TickAbilityCooldowns(EChessTeam Team)
 			Unit->AbilitySystemComponent->RemoveActiveGameplayEffect(EffectHandle, 1);
 		}
 	}
+}
+
+TArray<FEnemyAbilityCandidate> AChessGameMode::GatherEnemyAbilityCandidates() const
+{
+	TArray<FEnemyAbilityCandidate> Candidates;
+
+	TArray<AActor*> ActorList;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), ActorList);
+
+	for (AActor* Actor : ActorList)
+	{
+		AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor);
+		if (!Unit || Unit->Team != EChessTeam::Enemy) continue;
+		if (!Unit->AbilitySystemComponent || Unit->Attributes->GetHealth() <= 0) continue;
+		if (Unit->AbilitySystemComponent->HasMatchingGameplayTag(TAG_Ability_Cooldown)) continue;
+
+		const FGameplayAbilitySpec* Spec = Unit->AbilitySystemComponent->FindAbilitySpecFromHandle(Unit->ActiveAbilityHandle);
+		if (!Spec) continue;
+		const UChessAbilityBase* AbilityCDO = Cast<UChessAbilityBase>(Spec->Ability);
+		if (!AbilityCDO || !AbilityCDO->bActivatable) continue;
+
+		Candidates.Add({ FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), AbilityCDO->AbilityType });
+	}
+	return Candidates;
+}
+
+FEnemyAbilityChoice AChessGameMode::EvaluateAbilityCandidates(const TArray<FEnemyAbilityCandidate>& Candidates, FVirtualBoard Board) const
+{
+	FEnemyAbilityChoice Choice;
+	if (!GlobalPlanner || Candidates.Num() == 0) return Choice;
+
+	TArray<FIntPoint> Tiles;
+	for (int32 Y = 0; Y < Board.Height; Y++)
+		for (int32 X = 0; X < Board.Width; X++)
+			Tiles.Add(FIntPoint(X, Y));
+
+	struct FScoredOption
+	{
+		FIntPoint UnitPos;
+		FIntPoint Target;
+		EChessAbilityType Type;
+		float Score;
+	};
+	TArray<FScoredOption> Options;
+
+	for (const FEnemyAbilityCandidate& Candidate : Candidates)
+	{
+		for (const FIntPoint& Target : ChessAbilitySim::GetAbilityTargets(Board, Candidate.UnitPos, Candidate.Type))
+		{
+			FVirtualBoard Sim = Board;
+			ChessAbilitySim::ApplyAbility(Sim, Candidate.UnitPos, Candidate.Type, Target);
+			Options.Add({ Candidate.UnitPos, Target, Candidate.Type,
+				GlobalPlanner->EvaluateBoardShallow(Tiles, Sim, AbilityScreeningDepth, 0.05) });
+		}
+	}
+	if (Options.Num() == 0) return Choice;
+
+	Options.Sort([](const FScoredOption& A, const FScoredOption& B) { return A.Score > B.Score; });
+	Options.SetNum(FMath::Min(Options.Num(), AbilityFinalistCount));
+
+	const float Baseline = GlobalPlanner->EvaluateBoardShallow(Tiles, Board, AbilityFinalDepth, 0.3);
+	
+	const float EarlyGameMargin = AbilityScoreMargin + FMath::Max(0.f, (10 - TurnCount) * 0.5f);
+	float BestScore = Baseline + EarlyGameMargin;
+	
+	float BestRawScore = -BIG_NUMBER;
+	
+	for (const FScoredOption& Option : Options)
+	{
+		FVirtualBoard Sim = Board;
+		ChessAbilitySim::ApplyAbility(Sim, Option.UnitPos, Option.Type, Option.Target);
+		const float Score = GlobalPlanner->EvaluateBoardShallow(Tiles, Sim, AbilityFinalDepth, 0.3);
+		
+		BestRawScore = FMath::Max(BestRawScore, Score);
+		
+		if (Score > BestScore)
+		{
+			BestScore = Score;
+			Choice.bUseAbility = true;
+			Choice.UnitPos = Option.UnitPos;
+			Choice.TargetPos = Option.Target;
+		}
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("[HJ] Abilities: turn %d | margin %.1f | baseline %.1f | best option %.1f (gain %.1f) | chosen: %s"),
+		TurnCount, EarlyGameMargin, Baseline, BestRawScore, BestRawScore - Baseline,
+		Choice.bUseAbility ? TEXT("YES") : TEXT("NO"));
+
+	return Choice;
+}
+
+void AChessGameMode::FinishEnemyAbilityPhase(const FEnemyAbilityChoice& Choice)
+{
+	if (Choice.bUseAbility)
+	{
+		if (AChessUnitBase* Unit = GridManager->GetUnitAt(Choice.UnitPos))
+		{
+			Unit->PendingAbilityTarget = Choice.TargetPos;
+			if (Unit->AbilitySystemComponent->TryActivateAbility(Unit->ActiveAbilityHandle))
+			{
+				GenerateVirtualBoard();
+			}
+		}
+	}
+
+	BeginEnemyMovePhase();
+}
+
+void AChessGameMode::BeginEnemyMovePhase()
+{		
+	TArray<AActor*> ActorList;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AChessUnitBase::StaticClass(), ActorList);
+
+	GlobalPlanner->UnitLastPositions.Empty();
+	GlobalPlanner->UnitIdleTurns.Empty();
+	for (AActor* Actor : ActorList)
+	{
+		AChessUnitBase* Unit = Cast<AChessUnitBase>(Actor);
+		if (Unit && Unit->Attributes->GetHealth() > 0 && Unit->Team == EChessTeam::Enemy)
+		{
+			GlobalPlanner->UnitLastPositions.Add(FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), Unit->LastPosition);
+			GlobalPlanner->UnitIdleTurns.Add(FIntPoint(Unit->GridCoordinates.X, Unit->GridCoordinates.Y), Unit->TurnsSinceLastAction);
+			Unit->TurnsSinceLastAction++;
+		}
+	}
+
+	GlobalPlanner->AddToRoot();
+	TWeakObjectPtr<AChessGameMode> WeakThis(this);
+
+	Async(EAsyncExecution::Thread, [WeakThis, Planner = GlobalPlanner]()
+	{
+		FChessDecision BestDecision;
+		AChessUnitBase* BestUnit = nullptr;
+
+		if (WeakThis.IsValid())
+		{
+			WeakThis->ComputeGlobalAI(BestDecision, BestUnit, {});
+		}
+
+		Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, Planner, BestDecision]()
+		{
+			Planner->RemoveFromRoot();
+			if (!WeakThis.IsValid()) return;
+
+			AChessUnitBase* BestUnit = WeakThis->GridManager->GetUnitAt(BestDecision.SourcePosition);
+			if (BestUnit && BestUnit->GetController())
+			{
+				if (AChessAIController* ChessAIC = Cast<AChessAIController>(BestUnit->GetController()))
+				{
+					ChessAIC->PerformTask(BestDecision);
+				}
+			}
+			else
+			{
+				WeakThis->EndEnemyTurn();
+			}
+		});
+	});
 }
 
 void AChessGameMode::DisplayVirtualBoard()
@@ -549,6 +622,8 @@ void AChessGameMode::StartPlayerTurn_Implementation()
 	
 	SetCurrentTurn(ETurnState::Player);
 	GridManager->CurrentTurnActionState = ETurnState::Player;
+	
+	TurnCount++;
 }
 
 bool AChessGameMode::CheckWinCondition_Implementation(bool TriggerGameOver)
