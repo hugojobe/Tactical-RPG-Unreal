@@ -8,21 +8,32 @@
 
 void AChessLevelDesigner::GenerateLevels()
 {
-	StartGeneration();
-	
 	using T = EChessUnitType;
-	LevelRules = {
-		{ { T::Pawn },                                    2, 2, false }, // L1: pawns only
-		{ { T::Pawn },                                    3, 3, false }, // L2
-		{ { T::Pawn, T::Knight },                         3, 3, false }, // L3: +knight
-		{ { T::Pawn, T::Knight, T::Bishop },              4, 4, false }, // L4: +bishop
-		{ { T::Pawn, T::Knight, T::Bishop, T::Rook },     4, 4, false }, // L5: +rook
-		{ { T::Pawn, T::Knight, T::Bishop, T::Rook },     5, 5, false }, // L6
-		{ { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen }, 5, 5, false }, // L7: +queen
-		{ { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen }, 5, 6, false }, // L8: outnumbered
-		{ { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen }, 6, 7, false }, // L9
-		{ { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen }, 6, 7, true  }, // L10: Emperor boss
-		};
+
+	auto AddRule = [this](int32 Width, int32 Height, bool bRoyal, bool bBoss,
+		int32 PlayerCount, int32 EnemyCount, const TArray<T>& Allowed)
+	{
+		FLevelGenerationRule Rule;
+		Rule.BoardWidth = Width;
+		Rule.BoardHeight = Height;
+		Rule.bIncludeRoyal = bRoyal;
+		Rule.bEnemyBoss = bBoss;
+		Rule.PlayerPieceCount = PlayerCount;
+		Rule.EnemyPieceCount = EnemyCount;
+		Rule.AllowedPieces = Allowed;
+		LevelRules.Add(Rule);
+	};
+
+	AddRule(5, 5, false, false, 3, 3, { T::Pawn });
+	AddRule(5, 5, false, false, 4, 4, { T::Pawn, T::Knight });
+	AddRule(6, 6, false, false, 4, 4, { T::Pawn, T::Knight, T::Bishop });
+	AddRule(6, 6, true,  false, 4, 4, { T::Pawn, T::Knight, T::Bishop });
+	AddRule(6, 6, true,  false, 5, 5, { T::Pawn, T::Knight, T::Bishop, T::Rook });
+	AddRule(6, 6, true,  false, 5, 5, { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen });
+	AddRule(6, 6, true,  false, 5, 6, { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen });
+	AddRule(7, 7, true,  false, 6, 7, { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen });
+	AddRule(7, 7, true,  false, 6, 8, { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen });
+	AddRule(7, 7, true,  true,  6, 8, { T::Pawn, T::Knight, T::Bishop, T::Rook, T::Queen });
 }
 
 void AChessLevelDesigner::GenerateLevelsBlocking()
@@ -110,9 +121,10 @@ void AChessLevelDesigner::StepGeneration(int32 PlayoutsPerStep)
 
 	for (int32 Step = 0; Step < PlayoutsPerStep && bRunning; Step++)
 	{
-		const FVirtualBoard Setup = BuildRandomSetup(RNG, CurrentLevel);
-		Planner->bExpectPlayerKing = true;
-		Planner->bExpectEnemyKing = !LevelRules[CurrentLevel - 1].bEnemyBoss;
+		const FVirtualBoard Setup = BuildRandomSetup(RNG, CurrentLevel);		
+		Planner->bExpectPlayerKing = LevelRules[CurrentLevel - 1].bIncludeRoyal;
+		Planner->bExpectEnemyKing = LevelRules[CurrentLevel - 1].bIncludeRoyal;
+		
 		const FPlayoutResult Result = Playout(Setup);
 		const float Score = ScoreCandidate(Result);
 
@@ -124,6 +136,8 @@ void AChessLevelDesigner::StepGeneration(int32 PlayoutsPerStep)
 			Best.LeadChanges = Result.LeadChanges;
 			Best.Winner = Result.Winner;
 			Best.Placement.Empty();
+			Best.BoardWidth = Setup.Width;
+			Best.BoardHeight = Setup.Height;
 			for (int i = 0; i < Setup.Width * Setup.Height; ++i)
 			{
 				if (Setup.Grid[i].Team == EChessTeam::None) continue;
@@ -182,14 +196,17 @@ FVirtualUnit AChessLevelDesigner::MakeUnit(EChessUnitType Type, EChessTeam Team)
 FVirtualBoard AChessLevelDesigner::BuildRandomSetup(FRandomStream& Rng, int32 LevelIndex) const
 {
 	FVirtualBoard Board;
+	Board.Width = LevelRules[LevelIndex - 1].BoardWidth;
+	Board.Height = LevelRules[LevelIndex - 1].BoardHeight;
+	const int32 SpawnRanks = (Board.Height >= 6) ? 2 : 1;
 	
 	if (!LevelRules.IsValidIndex(LevelIndex - 1)) return Board;
 	const FLevelGenerationRule& Rule = LevelRules[LevelIndex - 1];
 
 	auto PlaceTeam = [&](EChessTeam Team, int32 PieceCount, bool bBoss)
-	{
-		const int32 RowMin = (Team == EChessTeam::Player) ? 0 : Board.Height - 2;
-		const int32 RowMax = (Team == EChessTeam::Player) ? 1 : Board.Height - 1;
+	{		
+		const int32 RowMin = (Team == EChessTeam::Player) ? 0 : Board.Height - SpawnRanks;
+		const int32 RowMax = RowMin + SpawnRanks - 1;
 
 		TArray<FIntPoint> FreeTiles;
 		for (int32 Y = RowMin; Y <= RowMax; Y++)
@@ -203,7 +220,7 @@ FVirtualBoard AChessLevelDesigner::BuildRandomSetup(FRandomStream& Rng, int32 Le
 			FreeTiles.RemoveAtSwap(Index);
 		};
 
-		PlaceAt(MakeUnit(bBoss ? EChessUnitType::Emperor : EChessUnitType::King, Team));
+		if (Rule.bIncludeRoyal) PlaceAt(MakeUnit(bBoss ? EChessUnitType::Emperor : EChessUnitType::King, Team));
 
 		for (int32 i = 0; i < PieceCount && FreeTiles.Num() > 0 && Rule.AllowedPieces.Num() > 0; i++)
 		{
@@ -325,10 +342,10 @@ float AChessLevelDesigner::ScoreCandidate(const FPlayoutResult& Result) const
 
 FString AChessLevelDesigner::ExportCandidate(const FLevelCandidate& Candidate) const
 {
-	constexpr int32 Width = 6;
-	constexpr int32 Height = 6;
+	const int32 Width = Candidate.BoardWidth;
+	const int32 Height = Candidate.BoardHeight;
 
-	TCHAR Grid[Width * Height];
+	TCHAR Grid[MAX_CHESS_BOARD_SIZE];
 	for (int32 i = 0; i < Width * Height; i++) Grid[i] = TEXT('.');
 
 	for (const FLevelPlacementEntry& Entry : Candidate.Placement)

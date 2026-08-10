@@ -41,6 +41,8 @@ struct FLevelCandidate
 	UPROPERTY(BlueprintReadOnly) int32 Rounds = 0;
 	UPROPERTY(BlueprintReadOnly) int32 LeadChanges = 0;
 	UPROPERTY(BlueprintReadOnly) EChessTeam Winner = EChessTeam::None;
+	UPROPERTY(BlueprintReadOnly) int32 BoardWidth = 6;
+	UPROPERTY(BlueprintReadOnly) int32 BoardHeight = 6;
 };
 
 USTRUCT(BlueprintType)
@@ -48,12 +50,19 @@ struct FLevelGenerationRule
 {
 	GENERATED_BODY()
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = 4, ClampMax = 8))
+	int32 BoardWidth = 6;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = 4, ClampMax = 8))
+	int32 BoardHeight = 6;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) TArray<EChessUnitType> AllowedPieces;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 PlayerPieceCount = 2;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 EnemyPieceCount = 2;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bEnemyBoss = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bIncludeRoyal = true;
 };
 
 UCLASS()
