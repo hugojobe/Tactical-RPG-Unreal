@@ -133,7 +133,7 @@ struct FAIWeights
     UPROPERTY() float EmperorAggression = 5.0f;
 
     // Root behaviour
-    UPROPERTY() float ActivityBonusWeight = 0.0f;
+    UPROPERTY() float ActivityBonusWeight = 0.005f;
 };
 
 UCLASS()

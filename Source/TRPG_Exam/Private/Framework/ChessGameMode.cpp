@@ -345,6 +345,8 @@ FEnemyAbilityChoice AChessGameMode::EvaluateAbilityCandidates(const TArray<FEnem
 
 void AChessGameMode::FinishEnemyAbilityPhase(const FEnemyAbilityChoice& Choice)
 {
+	bool bAbilityUsed = false;
+
 	if (Choice.bUseAbility)
 	{
 		if (AChessUnitBase* Unit = GridManager->GetUnitAt(Choice.UnitPos))
@@ -353,11 +355,19 @@ void AChessGameMode::FinishEnemyAbilityPhase(const FEnemyAbilityChoice& Choice)
 			if (Unit->AbilitySystemComponent->TryActivateAbility(Unit->ActiveAbilityHandle))
 			{
 				GenerateVirtualBoard();
+				bAbilityUsed = true;
 			}
 		}
 	}
 
-	BeginEnemyMovePhase();
+	if (bAbilityUsed)
+	{
+		GetWorld()->GetTimerManager().SetTimer(EnemyPhaseTimer, this, &AChessGameMode::BeginEnemyMovePhase, EnemyAbilityDelay, false);
+	}
+	else
+	{
+		BeginEnemyMovePhase();
+	}
 }
 
 void AChessGameMode::BeginEnemyMovePhase()

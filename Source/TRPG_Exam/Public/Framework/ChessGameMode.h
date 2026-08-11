@@ -115,6 +115,11 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "AI")
 	int32 AbilityFinalistCount = 3;
+	
+	UPROPERTY(EditAnywhere, Category = "AI")
+	float EnemyAbilityDelay = 0.75f;
+
+	FTimerHandle EnemyPhaseTimer;
 
 	TArray<FEnemyAbilityCandidate> GatherEnemyAbilityCandidates() const;
 	FEnemyAbilityChoice EvaluateAbilityCandidates(const TArray<FEnemyAbilityCandidate>& Candidates, FVirtualBoard Board) const;
