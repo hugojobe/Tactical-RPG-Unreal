@@ -179,6 +179,9 @@ Fun cannot be measured directly, so the tool uses indirect indicators chosen to 
 | Medium duration | Positive | Neither too fast nor too slow |
 | Player win | Positive | The level must be winnable on equal terms |
 
+<img width="1300" height="594" alt="image" src="https://github.com/user-attachments/assets/0b3ae107-882a-40c5-a8c0-a8ba4a604293" />
+
+
 ## Tool: weight optimizer
  
 The evaluation function relies on about **ten coefficients** (how much an HP point is worth, how much weight center control gets, etc.). They were first picked by intuition, with no guarantee they are good and no way to check except by playing.
