@@ -10,8 +10,7 @@ The project has three technical pillars:
 
 > **Context:** school project (HEAJ, 2025-2026), solo project.
 
-<img width="800" height="450" alt="image" src="https://github.com/user-attachments/assets/e312047b-c95a-4ce9-8749-e6260583cd11" />
-
+<img width="800" height="450" alt="ezgif-6926ce4611e7c522" src="https://github.com/user-attachments/assets/ba9652c3-caec-46cf-b467-4a65a53229f6" />
 
 ## Table of contents
  
