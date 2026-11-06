@@ -10,6 +10,9 @@ The project has three technical pillars:
 
 > **Context:** school project (HEAJ, 2025-2026), solo project.
 
+<img width="800" height="450" alt="image" src="https://github.com/user-attachments/assets/e312047b-c95a-4ce9-8749-e6260583cd11" />
+
+
 ## Table of contents
  
 - [Game design](#game-design)
@@ -152,6 +155,8 @@ Players spend **Research Points** to unlock abilities: **passives** (permanent b
 - **Data-driven.** Each piece's tree is a **data asset** containing a list of node structs.
 - **Subsystem.** On `BeginPlay`, each player unit queries the skill tree subsystem, applies purchased passives one by one, then equips the selected active ability.
 - Enemy units do not use the skill tree. Their passives and actives are set directly in the editor on each piece.
+
+<img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/31f518df-bc8c-4f8a-8448-62bc9fdf95cc" />
 
 # Tool: level generator
  
